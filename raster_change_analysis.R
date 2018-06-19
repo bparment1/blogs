@@ -1,6 +1,58 @@
+############################################################################
+#####  Parameters and argument set up ###########
+
+out_suffix <- "change_" #output suffix for the files and ouptut folder #param 12
+
+in_dir <- "/nfs/bparmentier-data/Data/blogs/blog1_basic_change_analysis/data/"
+out_dir <- "/nfs/bparmentier-data/Data/blogs/blog1_basic_change_analysis/outputs"
+
+file_format <- ".tif" #PARAM5
+NA_flag_val <- -9999 #PARAM7
+create_out_dir_param=TRUE #PARAM9
+
+#new_strata_rita_10282017.shp
+#nlcd_2006_RITA.tif
+#nlcd_legend.txt
+#df_modis_band_info.txt
+
+infile_reflectance_date1 <- "mosaiced_MOD09A1_A2005265__006_reflectance_masked_RITA_reg_1km.tif"
+infile_reflectance_date2 <- "mosaiced_MOD09A1_A2005273__006_reflectance_masked_RITA_reg_1km.tif"
 
 ###############################################
 ##### PART III: Band combination: Indices and thresholding for flood mapping ##############
+
+  
+###### Read in MOD09 reflectance images before and after Hurrican Rita.
+r_before <- brick(file.path(in_dir,infile_reflectance_date1)) # Before RITA, Sept. 22, 2005.
+r_after <- brick(file.path(in_dir,infile_reflectance_date2)) # After RITA, Sept 30, 2005.
+
+
+names <- 
+#### Generate Color composites
+### True color composite
+
+plotRGB(r_before,
+        r=1,
+        g=4,
+        b=3,
+        scale=0.6,
+        strech="hist")
+
+### False color composite:
+
+plotRGB(r_before,
+        r=2,
+        g=1,
+        b=4,
+        scale=0.6,
+        strech="hist")
+
+plotRGB(r_after,
+        r=2,
+        g=1,
+        b=4,
+        scale=0.6,
+        strech="hist")
 
 ### NIR experiment with threshold to  map water/flooding
 
