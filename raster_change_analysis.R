@@ -26,33 +26,40 @@ infile_reflectance_date2 <- "mosaiced_MOD09A1_A2005273__006_reflectance_masked_R
 r_before <- brick(file.path(in_dir,infile_reflectance_date1)) # Before RITA, Sept. 22, 2005.
 r_after <- brick(file.path(in_dir,infile_reflectance_date2)) # After RITA, Sept 30, 2005.
 
+names(r_before) <- c("Red","NIR","Blue","Green","SWIR1","SWIR2","SWIR3")
+names(r_after) <- c("Red","NIR","Blue","Green","SWIR1","SWIR2","SWIR3")
 
-names <- 
 #### Generate Color composites
 ### True color composite
+
+# 4 figures arranged in 2 rows and 2 columns
+#attach(mtcars)
+par(mfrow=c(2,1))
 
 plotRGB(r_before,
         r=1,
         g=4,
         b=3,
         scale=0.6,
-        strech="hist")
+        stretch="hist",
+        main="before")
+
+plotRGB(r_after,
+        r=1,
+        g=4,
+        b=3,
+        scale=0.6,
+        stretch="hist",
+        main="after")
 
 ### False color composite:
-
-plotRGB(r_before,
-        r=2,
-        g=1,
-        b=4,
-        scale=0.6,
-        strech="hist")
 
 plotRGB(r_after,
         r=2,
         g=1,
         b=4,
         scale=0.6,
-        strech="hist")
+        stretch="hist")
 
 ### NIR experiment with threshold to  map water/flooding
 
@@ -73,3 +80,5 @@ xtab_threshold <- crosstab(r_ref,r_rec_NIR_after,long=T)
 
 ## % overlap between the flooded area and values below 0.2 in NIR
 (xtab_threshold[5,3]/freq_fema_zones[2,2])*100 #agreement with FEMA flooded area in %.
+
+###################################   End of script ###########################################
