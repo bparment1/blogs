@@ -1,0 +1,74 @@
+---
+title: "Raster Change"
+author: "Benoit Parmentier"
+date: "6/25/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sp) # spatial/geographfic objects and functions
+library(rasterVis) # raster visualization operations
+library(raster) # raster functionalities
+library(rgeos) #contains topological operations
+library(sf) # spatial objects classes
+library(plotrix) #various graphic functions e.g. draw.circle
+```
+
+## Raster Change analysis with Two dates: Hurricane RITA
+
+This blog provides a simple example of change analysis using remotely sensed images from two dates. We use two images from the MODIS Terra Sensor (MOD09) to examine if the impact of Hurricane Rita is visible on the ground. Hurricane Rita made is a category 3 hurricane that made landfall on September 24, 2005 in the southwest Louisiana coast. The hurricane generated a surge of more than 4 meters than inundated several areas.
+
+I downloaded and processed MOD09 images for the date before and after hurricane Rita. The data was screened for unreliable pixels and aggregated at a 1km to deal with missing values. 
+
+
+```{r cars}
+
+############################################################################
+#####  Parameters and argument set up ###########
+
+out_suffix <- "change_" #output suffix for the files and ouptut folder #param 12
+
+in_dir <- "/nfs/bparmentier-data/Data/blogs/blog1_basic_change_analysis/data/"
+out_dir <- "/nfs/bparmentier-data/Data/blogs/blog1_basic_change_analysis/outputs"
+
+file_format <- ".tif" #PARAM5
+NA_flag_val <- -9999 #PARAM7
+create_out_dir_param=TRUE #PARAM9
+
+#new_strata_rita_10282017.shp
+#nlcd_2006_RITA.tif
+#nlcd_legend.txt
+#df_modis_band_info.txt
+
+
+infile_reflectance_date1 <- "mosaiced_MOD09A1_A2005265__006_reflectance_masked_RITA_reg_1km.tif"
+infile_reflectance_date2 <- "mosaiced_MOD09A1_A2005273__006_reflectance_masked_RITA_reg_1km.tif"
+
+###############################################
+##### PART III: Band combination: Indices and thresholding for flood mapping ##############
+
+  
+###### Read in MOD09 reflectance images before and after Hurrican Rita.
+r_before <- brick(file.path(in_dir,infile_reflectance_date1)) # Before RITA, Sept. 22, 2005.
+r_after <- brick(file.path(in_dir,infile_reflectance_date2)) # After RITA, Sept 30, 2005.
+
+names(r_before) <- c("Red","NIR","Blue","Green","SWIR1","SWIR2","SWIR3")
+names(r_after) <- c("Red","NIR","Blue","Green","SWIR1","SWIR2","SWIR3")
+
+plot(r_before)
+plot(r_after)
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+################
