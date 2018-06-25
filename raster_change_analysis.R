@@ -186,6 +186,8 @@ r_change_neg <- r_std < -1.96
 plot(r_change_pos)
 plot(r_change_neg)
 
+shapiro.test(as.vector(r_diff))
+
 ### 3) PCA
 
 #Correlate long term mean to PC!
@@ -198,8 +200,10 @@ pca_mod <- principal(cor_matrix,nfactors=2,rotate="none")
 class(pca_mod$loadings)
 print(pca_mod$loadings)
 
-df_loadings <- pca_mod$loadings
-head(df_loadings)
+loadings_df <- as.matrix(pca_mod$loadings)
+loadings_df <- as.data.frame(pca_mod$loadings)
+
+#head(df_loadings)
 
 ### Generate scores from eigenvectors
 ### Using predict function: this is recommended for raster.
@@ -228,11 +232,14 @@ plot(loadings_df[,1],loadings_df[,2],
      axes = FALSE,
      cex.lab = 1.2)
 
-points(cor_r_TC$pc_scores.1[1],cor_r_TC$pc_scores.2[1],col="red")
-points(cor_r_TC$pc_scores.1[2],cor_r_TC$pc_scores.2[2],col="green")
+#points(cor_matrix$pc_scores.1[1],cor_matrix$pc_scores.2[1],col="red")
+#points(cor_matrix$pc_scores.1[2],cor_matrix$pc_scores.2[2],col="green")
 
 axis(1, at=seq(-1,1,0.2),cex=1.2)
 axis(2, las=1,at=seq(-1,1,0.2),cex=1.2) # "1' for side=below, the axis is drawned  on the right at location 0 and 1
 box()    #This draws a box...
+
+
+######## Extract values before and after for NDVI
 
 ###################################   End of script ###########################################
