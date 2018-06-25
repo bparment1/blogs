@@ -1,8 +1,12 @@
 ---
-title: "Raster Change"
+title: "Raster Change Analysis"
 author: "Benoit Parmentier"
 date: "6/25/2018"
-output: html_document
+output: 
+  html_document:
+    #theme: null
+    #highlight: null
+    #css: styles.css
 ---
 
 ```{r setup, include=FALSE}
@@ -13,37 +17,54 @@ library(raster) # raster functionalities
 library(rgeos) #contains topological operations
 library(sf) # spatial objects classes
 library(plotrix) #various graphic functions e.g. draw.circle
+library(colorRamps) #contains matlab.like color palette
+
 ```
 
 ## Raster Change analysis with Two dates: Hurricane RITA
 
-This blog provides a simple example of change analysis using remotely sensed images from two dates. We use two images from the MODIS Terra Sensor (MOD09) to examine if the impact of Hurricane Rita is visible on the ground. Hurricane Rita made is a category 3 hurricane that made landfall on September 24, 2005 in the southwest Louisiana coast. The hurricane generated a surge of more than 4 meters than inundated several areas.
+This blog provides a simple example of change analysis using remotely sensed images from two dates. We use two images from the MODIS Terra Sensor (MOD09) to examine if the impact of Hurricane Rita is visible on the ground. Hurricane Rita is a category 3 hurricane that made landfall on September 24, 2005 in the southwest Louisiana coast. The hurricane generated a surge of more than 4 meters than resuldated in flooding in several areas along the coast.
 
 I downloaded and processed MOD09 images for the date before and after hurricane Rita. The data was screened for unreliable pixels and aggregated at a 1km to deal with missing values. 
 
+### Setting up input parameters and directories
 
-```{r cars}
+First let us set up the input directories. It is good practice to concentrate all the variables and input parameters at the
+start of the script. We also create an output directory that can change for each analysis (using output suffix as identifier).
+
+
+```{r }
 
 ############################################################################
 #####  Parameters and argument set up ###########
 
-out_suffix <- "change_" #output suffix for the files and ouptut folder #param 12
+#Note: https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/20170008750.pdf
+out_suffix <- "change_" #output suffix for the files and ouptut folder #param 1
+
+#in_dir <- "./blogs/blog1_basic_change_analysis/data/"
+#out_dir <- "./blogs/blog1_basic_change_analysis/outputs"
 
 in_dir <- "/nfs/bparmentier-data/Data/blogs/blog1_basic_change_analysis/data/"
 out_dir <- "/nfs/bparmentier-data/Data/blogs/blog1_basic_change_analysis/outputs"
 
-file_format <- ".tif" #PARAM5
-NA_flag_val <- -9999 #PARAM7
-create_out_dir_param=TRUE #PARAM9
+file_format <- ".tif" #PARAM 4
+NA_flag_val <- -9999 #PARAM 5
+create_out_dir_param=TRUE #PARAM6
 
-#new_strata_rita_10282017.shp
-#nlcd_2006_RITA.tif
-#nlcd_legend.txt
-#df_modis_band_info.txt
+infile_reflectance_date1 <- "mosaiced_MOD09A1_A2005265__006_reflectance_masked_RITA_reg_1km.tif" #PARAM 7
+infile_reflectance_date2 <- "mosaiced_MOD09A1_A2005273__006_reflectance_masked_RITA_reg_1km.tif" #PARAM 8
+
+```
 
 
-infile_reflectance_date1 <- "mosaiced_MOD09A1_A2005265__006_reflectance_masked_RITA_reg_1km.tif"
-infile_reflectance_date2 <- "mosaiced_MOD09A1_A2005273__006_reflectance_masked_RITA_reg_1km.tif"
+### Reading in rasters and visualizing bands
+
+We then load in the input images. We chose the dates closest to the hurricane event. The first date corresponds to September 22, 2005 (before event) and the second date to September 30 2005 (after event). We use a brick and assign the corresponding
+band names. MOD09 product contains seven bands spanning the optical spectrum. More information can be found at https://lpdaac.usgs.gov/dataset_discovery/modis/modis_products_table
+
+Note that the bands are not ordered in the order of their spectral wavelengths.
+
+```{r }
 
 ###############################################
 ##### PART III: Band combination: Indices and thresholding for flood mapping ##############
@@ -61,14 +82,105 @@ plot(r_after)
 
 ```
 
-## Including Plots
+### Visulization of impact using true and false color composites.
 
-You can also embed plots, for example:
+We generate color composites to visual check for change. First we use a RGB color composite which requires identifying spectral bands corresponding to red (band 1), green (band 4) and blue (band 1).This generates a true color composite image 
+similar to a color photography.
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r , echo=TRUE}
+
+#### Generate Color composites
+### True color composite
+
+# 4 figures arranged in 2 rows and 2 columns
+#attach(mtcars)
+par(mfrow=c(2,1))
+
+plotRGB(r_before,
+        r=1,
+        g=4,
+        b=3,
+        scale=0.6,
+        stretch="hist",
+        main="before")
+
+plotRGB(r_after,
+        r=1,
+        g=4,
+        b=3,
+        scale=0.6,
+        stretch="hist",
+        main="after")
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+A second useful step is to generate a False color composite. This is similar to a Color Infrared (CIR) photography. This may be particularly useful since we use bands that may be affected by the presence of water on the ground. Vegetation is also often studied and which can affect spectral signal from vegtation. We generate a RGB false composite which requires identifying spectral bands corresponding to red (band 2: SWIR), green (band 4) and blue (band 1).
 
-################
+```{r, echo=TRUE}
+
+### False color composite:
+par(mfrow=c(2,1))
+plotRGB(r_before,
+        r=2,
+        g=1,
+        b=4,
+        scale=0.6,
+        stretch="hist")
+
+plotRGB(r_after,
+        r=2,
+        g=1,
+        b=4,
+        scale=0.6,
+        stretch="hist")
+
+```
+
+### Generating Indices from the original bands: NDWI
+
+We use the original bands from MOD09 product to generate NDVI and NDWI indices the study of change. Indices are derived for both ebefore and after. There are different choices to generate a NDWI and we list from the literature: 
+
+#1) NDVI = (NIR - Red)/(NIR+Red)
+#2) NDWI = (Green - NIR)/(Green + NIR)
+#3) MNDWI = Green - SWIR2 / Green + SWIR2
+#4) NDWI2 (LSWIB5) =  (NIR - SWIR1)/(NIR + SWIR1)
+#5) LSWI (LSWIB5) =  (NIR - SWIR2)/(NIR + SWIR2)
+
+We ise here another modified flavor
+
+We will use the third opiton and 
+
+```{r},echo=TRUE}
+
+############## Generating indices based on raster algebra of original bands
+## Let's generate a series of indices, we list a few possibility from the literature.
+
+#3) MNDWI = Green - SWIR2 / Green + SWIR2
+
+names(r_before)
+r_before_NDVI <- (r_before$NIR - r_before$Red) / (r_before$NIR + r_before$Red)
+r_after_NDVI <- subset(r_after,"NIR") - subset(r_after,"Red")/(subset(r_after,"NIR") + subset(r_after,"Red"))
+
+r_before_NDWI <- (r_before$Red - r_before$SWIR2) / (r_before$Red + r_before$SWIR2)
+r_after_NDWI <- (r_after$Red - r_after$SWIR2) / (r_after$Red + r_after$SWIR2)
+
+#r_before_NDWI <- (r_before$NIR - r_before$SWIR2) / (r_before$NIR + r_before$SWIR2)
+#r_after_NDWI <- (r_after$NIR - r_after$SWIR2) / (r_after$NIR + r_after$SWIR2)
+
+levelplot(stack(r_before_NDWI,r_after_NDWI),col.regions=rev(matlab.like(255)))
+levelplot(stack(r_before_NDVI,r_after_NDVI),col.regions=rev(terrain.colors(255)))
+
+#par(mfrow=c(2,1))
+#plot(r_before_NDWI,zlim=c(-1,1),col=matlab.like(255))
+#plot(r_after_NDWI,zlim=c(-1,1),col=matlab.like2(255))
+
+```
+
+
+
+
+
+##############
+
+
+
