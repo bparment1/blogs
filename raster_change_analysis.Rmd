@@ -25,7 +25,7 @@ library(colorRamps) #contains matlab.like color palette
 
 This blog provides a simple example of change analysis using remotely sensed images from two dates. We use two images from the MODIS Terra Sensor (MOD09) to examine if the impact of Hurricane Rita is visible on the ground. Hurricane Rita is a category 3 hurricane that made landfall on September 24, 2005 in the southwest Louisiana coast. The hurricane generated a surge of more than 4 meters than resuldated in flooding in several areas along the coast.
 
-I downloaded and processed MOD09 images for the date before and after hurricane Rita. The data was screened for unreliable pixels and aggregated at a 1km to deal with missing values. 
+I downloaded and processed MOD09 images for the date before and after hurricane Rita. The data was screened for unreliable pixels and aggregated at a 1km to deal with missing values (upcoming blogs on the flag processing!)
 
 ### Setting up input parameters and directories
 
@@ -82,7 +82,7 @@ plot(r_after)
 
 ```
 
-### Visulization of impact using true and false color composites.
+### Visualization of impact using true and false color composites.
 
 We generate color composites to visual check for change. First we use a RGB color composite which requires identifying spectral bands corresponding to red (band 1), green (band 4) and blue (band 1).This generates a true color composite image 
 similar to a color photography.
@@ -136,21 +136,18 @@ plotRGB(r_after,
 
 ```
 
+Visual inspection suggest some change areas especially visible in the false color composite towards the coast the South East part of the study area. The next will be to quantitavely assess where changes occurs. We will use specific spectral bands combinations (indices) to focus on specific features from the ground. 
+
 ### Generating Indices from the original bands: NDWI
 
 We use the original bands from MOD09 product to generate NDVI and NDWI indices the study of change. Indices are derived for both ebefore and after. There are different choices to generate a NDWI and we list from the literature: 
 
-#1) NDVI = (NIR - Red)/(NIR+Red)
-#2) NDWI = (Green - NIR)/(Green + NIR)
-#3) MNDWI = Green - SWIR2 / Green + SWIR2
-#4) NDWI2 (LSWIB5) =  (NIR - SWIR1)/(NIR + SWIR1)
-#5) LSWI (LSWIB5) =  (NIR - SWIR2)/(NIR + SWIR2)
+1) NDVI = (NIR - Red)/(NIR+Red)
+2) NDWI =  (NIR - SWIR2)/(NIR + SWIR2)
 
-We ise here another modified flavor
+NDVI is widely used to detect vegetation on the ground. We use here a modified flavor of NDWI using SWIR2 and NIR because the literature suggest these are useful to detect water fraction on the ground in the case of the MODIS sensor. We generated indices for both dates and plot maps on the same scale using the levelplot function from RasterVis.
 
-We will use the third opiton and 
-
-```{r},echo=TRUE}
+```{r,echo=TRUE}
 
 ############## Generating indices based on raster algebra of original bands
 ## Let's generate a series of indices, we list a few possibility from the literature.
@@ -161,11 +158,11 @@ names(r_before)
 r_before_NDVI <- (r_before$NIR - r_before$Red) / (r_before$NIR + r_before$Red)
 r_after_NDVI <- subset(r_after,"NIR") - subset(r_after,"Red")/(subset(r_after,"NIR") + subset(r_after,"Red"))
 
-r_before_NDWI <- (r_before$Red - r_before$SWIR2) / (r_before$Red + r_before$SWIR2)
-r_after_NDWI <- (r_after$Red - r_after$SWIR2) / (r_after$Red + r_after$SWIR2)
+#r_before_NDWI <- (r_before$Red - r_before$SWIR2) / (r_before$Red + r_before$SWIR2)
+#r_after_NDWI <- (r_after$Red - r_after$SWIR2) / (r_after$Red + r_after$SWIR2)
 
-#r_before_NDWI <- (r_before$NIR - r_before$SWIR2) / (r_before$NIR + r_before$SWIR2)
-#r_after_NDWI <- (r_after$NIR - r_after$SWIR2) / (r_after$NIR + r_after$SWIR2)
+r_before_NDWI <- (r_before$NIR - r_before$SWIR2) / (r_before$NIR + r_before$SWIR2)
+r_after_NDWI <- (r_after$NIR - r_after$SWIR2) / (r_after$NIR + r_after$SWIR2)
 
 levelplot(stack(r_before_NDWI,r_after_NDWI),col.regions=rev(matlab.like(255)))
 levelplot(stack(r_before_NDVI,r_after_NDVI),col.regions=rev(terrain.colors(255)))
@@ -176,9 +173,56 @@ levelplot(stack(r_before_NDVI,r_after_NDVI),col.regions=rev(terrain.colors(255))
 
 ```
 
+Comparison of before and after NDVI suggest a general drop in NDVI for the region while the NDWI indicate some additional pockets of water near the coasts. 
 
+```{r,echo=T}
 
+##### How do we map change related to event?
 
+### Lower NIR often correlates to areas with high water fraction or inundated:
+
+#1) Simple thresholding
+#2) Difference 
+#3) PCA
+
+### 1) Simple thresholding
+
+r_rec_NDWI_before <- subset(r_before,"NIR") < 0.2
+r_rec_NDWI_after <- subset(r_after,"NIR") < 0.2
+
+### THis is suggesting flooding!!!
+plot(r_rec_NDWI_before, main="Before RITA, NDWI > 0.2")
+plot(r_rec_NDWI_after, main="After RITA, NDWI > 0.2")
+
+#Compare to actual flooding data
+#freq_fema_zones <- as.data.frame(freq(r_ref))
+#xtab_threshold <- crosstab(r_ref,r_rec_NIR_after,long=T)
+
+## % overlap between the flooded area and values below 0.2 in NIR
+#(xtab_threshold[5,3]/freq_fema_zones[2,2])*100 #agreement with FEMA flooded area in %.
+
+### 2) Difference
+
+r_diff <- r_after_NDWI - r_before_NDWI
+
+plot(r_diff)
+histogram(r_diff)
+
+r_std <- (r_diff - cellStats(r_diff,"mean"))/cellStats(r_diff,"sd")
+
+plot(r_std)
+hist(r_std)
+abline(v=1.96,col="red",tly=1)
+abline(v=-1.96,col="red",tly=1)
+
+r_change_pos <- r_std > 1.96
+r_change_neg <- r_std < -1.96
+plot(r_change_pos)
+plot(r_change_neg)
+
+#shapiro.test(as.vector(r_diff))
+
+```
 
 ##############
 
