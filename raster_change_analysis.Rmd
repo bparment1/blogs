@@ -1,7 +1,7 @@
 ---
-title: "Raster Change Analysis"
+title: "Raster Change Analysis with two images"
 author: "Benoit Parmentier"
-date: "6/25/2018"
+date: "7/15/2018"
 output: 
   html_document:
     #theme: null
@@ -54,6 +54,8 @@ create_out_dir_param=TRUE #PARAM6
 infile_reflectance_date1 <- "mosaiced_MOD09A1_A2005265__006_reflectance_masked_RITA_reg_1km.tif" #PARAM 7
 infile_reflectance_date2 <- "mosaiced_MOD09A1_A2005273__006_reflectance_masked_RITA_reg_1km.tif" #PARAM 8
 
+new_strata_rita_10282017.shp
+
 ```
 
 
@@ -82,10 +84,11 @@ plot(r_after)
 
 ```
 
+We note that Near Infrared and Short Wave Infrared (SWIR1 and SWIR2) often high contrast between vegetated areas and water. These bands also display changes in areas in near the coast.
+
 ### Visualization of impact using true and false color composites.
 
-We generate color composites to visual check for change. First we use a RGB color composite which requires identifying spectral bands corresponding to red (band 1), green (band 4) and blue (band 1).This generates a true color composite image 
-similar to a color photography.
+A first step in the change analysis is to visually inspect for change using bands combination. We generate color composites using RGB color compositing which requires identifying spectral bands corresponding to red (band 1), green (band 4) and blue (band 1).This generates a true color composite image similar to a color photography.
 
 ```{r , echo=TRUE}
 
@@ -164,12 +167,20 @@ r_after_NDVI <- subset(r_after,"NIR") - subset(r_after,"Red")/(subset(r_after,"N
 r_before_NDWI <- (r_before$NIR - r_before$SWIR2) / (r_before$NIR + r_before$SWIR2)
 r_after_NDWI <- (r_after$NIR - r_after$SWIR2) / (r_after$NIR + r_after$SWIR2)
 
-levelplot(stack(r_before_NDWI,r_after_NDWI),col.regions=rev(matlab.like(255)))
-levelplot(stack(r_before_NDVI,r_after_NDVI),col.regions=rev(terrain.colors(255)))
+r_NDWI_s <- stack(r_before_NDWI,r_after_NDWI)
+names_panel <- c("NDWI Before event","NDWI After event")
+levelplot(r_NDWI_s,
+          names.attr=names_panel,
+          col.regions=rev(matlab.like(255)))
 
-#par(mfrow=c(2,1))
-#plot(r_before_NDWI,zlim=c(-1,1),col=matlab.like(255))
-#plot(r_after_NDWI,zlim=c(-1,1),col=matlab.like2(255))
+#levelplot(stack(r_before_NDVI,r_after_NDVI),col.regions=rev(terrain.colors(255)))
+r_NDVI_s <- stack(r_before_NDVI,r_after_NDVI)
+#names(r_NDVI_s) <- c("Before event","After event")
+names_panel <- c("NDVI Before Event","NDVI After Event")
+levelplot(r_NDVI_s,
+          names.attr = names_panel,
+          col.regions=rev(terrain.colors(255)))
+
 
 ```
 
@@ -210,17 +221,38 @@ histogram(r_diff)
 
 r_std <- (r_diff - cellStats(r_diff,"mean"))/cellStats(r_diff,"sd")
 
+threshold_val <- c(1.96,1.64)
 plot(r_std)
 hist(r_std)
-abline(v=1.96,col="red",tly=1)
-abline(v=-1.96,col="red",tly=1)
+abline(v=threshold_val[1],col="red",tly=1)
+abline(v=-threshold_val[1],col="red",tly=1)
 
-r_change_pos <- r_std > 1.96
-r_change_neg <- r_std < -1.96
+r_change_pos <- r_std > treshold_val[1]
+r_change_neg <- r_std < -threshold_val[1]
+
 plot(r_change_pos)
 plot(r_change_neg)
 
 #shapiro.test(as.vector(r_diff))
+
+
+### Generate a map of flooding with MNDWI and compare to FEMA map:
+
+r_after_flood <- r_diff_std > 1 
+plot(r_after_flood)
+
+#reclass in zero/1!!!
+
+df <- data.frame(id=c(1,2), v=c(0,1))
+r_ref_rec <- subs(r_ref, df)
+plot(r_ref_rec)
+xtab_tb <- crosstab(r_after_flood,r_ref_rec)
+
+## Examine overlap between flooded area and FEMA:
+
+plot(r_after_flood)
+r_overlap <- r_ref_rec * r_after_flood
+plot(r_overlap) ## Flood map area of aggreement with FEMA
 
 ```
 
