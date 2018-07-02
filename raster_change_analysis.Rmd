@@ -18,6 +18,8 @@ library(rgeos) #contains topological operations
 library(sf) # spatial objects classes
 library(plotrix) #various graphic functions e.g. draw.circle
 library(colorRamps) #contains matlab.like color palette
+library(dplyr)
+library(tidyr)
 
 ```
 
@@ -153,9 +155,7 @@ NDVI is widely used to detect vegetation on the ground. We use here a modified f
 ```{r,echo=TRUE}
 
 ############## Generating indices based on raster algebra of original bands
-## Let's generate a series of indices, we list a few possibility from the literature.
-
-#3) MNDWI = Green - SWIR2 / Green + SWIR2
+## Let's generate a NDVI and a version of NDWI adapted to MODIS:
 
 names(r_before)
 r_before_NDVI <- (r_before$NIR - r_before$Red) / (r_before$NIR + r_before$Red)
@@ -170,9 +170,7 @@ levelplot(r_NDWI_s,
           names.attr=names_panel,
           col.regions=rev(matlab.like(255)))
 
-#levelplot(stack(r_before_NDVI,r_after_NDVI),col.regions=rev(terrain.colors(255)))
 r_NDVI_s <- stack(r_before_NDVI,r_after_NDVI)
-#names(r_NDVI_s) <- c("Before event","After event")
 names_panel <- c("NDVI Before Event","NDVI After Event")
 levelplot(r_NDVI_s,
           names.attr = names_panel,
@@ -243,12 +241,6 @@ plot(r_after_flood)
 
 plot(r_after_flood)
 
-
-xtab_tb <- crosstab(r_after_flood,r_ref)
-
-r_overlap <- r_ref_rec * r_after_flood
-plot(r_overlap) ## Flood map area of aggreement with FEMA
-
 reg_sf <- st_read(file.path(in_dir,infile_reg_outline))
 
 reg_sf <- st_transform(reg_sf,
@@ -261,11 +253,54 @@ r_ref <- rasterize(reg_sp,
                    r_diff,
                    field="OBJECTID_3",
                    fun="min")
+
+r_var <- stack(r_after_NDVI,r_before_NDVI, r_before_NDWI,r_after_NDWI)
+names(r_var) <- c("NDVI_1","NDVI_2","NDWI_1","NDWI_2")
+zonal_var_df <- as.data.frame(t(zonal(x=r_var,z=r_ref,fun='mean')))
+zonal_var_df <- as.data.frame(zonal(x=r_var,z=r_ref,fun='mean'))
+head(zonal_var_df)
+
+View(zonal_var_df)
+test <- gather(zonal_var_df,variable,value,NDVI_1:NDWI_2)
+head(test)
+View(test)
+
+test <- gather_(zonal_var_df,key="variable",value="value",names(r_var))
+test$date <- unlist(lapply(test$variable,FUN=function(x){strsplit(x,'["_"]')[[1]][2]}))
+test$index <- unlist(lapply(test$variable,FUN=function(x){strsplit(x,'["_"]')[[1]][1]}))
+View(test$date)
+strsplit(test$variable[3],'["_"]')[[1]][2]
+test$zone <- as.factor(test$zone)
+test$index <- as.factor(test$index)
+
+xyplot(value~date|zone,groups="index",data=test, type = c('g', 'p'))
+xyplot(value~date|index,groups="zone",data=test, type = c('g', 'p'))
+
+xyplot(value~date|zone,data=test)
+
+?xyplot
+
+View(test)
+names(zonal_var_df)
+?gather
+plot(zonal_var_df$V1)
+?mutate
+View(NDVI_df)
+
+?group
+
+head(NDVI_df)
+
+plot()
+xtab_tb <- crosstab(r_after_flood,r_ref)
+
+r_overlap <- r_ref_rec * r_after_flood
+plot(r_overlap) ## Flood map area of aggreement with FEMA
+
+
 plot(r_ref) # zone 1 is flooded and zone 0 is not flooded
 
 xtab_tb <- crosstab(r_after_flood,r_ref)
-
-
 
 #### Let's examine a location within FEMA flooded zone and outside: use centroids
 centroids_sf <- st_centroid(reg_sf)
@@ -277,18 +312,8 @@ df_after <- extract(r_after,centroids_sf)
 plot(df_before[2,],type="l")
 lines(df_after[2,],col="red")
 
-## Read band information since it is more informative!!
-df_modis_band_info <- read.table(file.path(in_dir_var,infile_modis_bands_information),
-                                 sep=",",
-                                 stringsAsFactors = F)
-print(df_modis_band_info)
-
-names(r_before) <- df_modis_band_info$band_name
-names(r_after) <- df_modis_band_info$band_name
-
 ### Order band in terms of wavelenth:
 
-df_modis_band_info <- df_modis_band_info[order(df_modis_band_info$start_wlength),]
 #SWIR1 (1230–1250 nm), SWIR2 (1628–1652 nm) and SWIR3 (2105–2155 nm).
 band_refl_order <- df_modis_band_info$band_number
 
