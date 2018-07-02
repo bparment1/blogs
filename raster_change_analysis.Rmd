@@ -23,7 +23,7 @@ library(colorRamps) #contains matlab.like color palette
 
 ## Raster Change analysis with Two dates: Hurricane RITA
 
-This blog provides a simple example of change analysis using remotely sensed images from two dates. We use two images from the MODIS Terra Sensor (MOD09) to examine if the impact of Hurricane Rita is visible on the ground. Hurricane Rita is a category 3 hurricane that made landfall on September 24, 2005 in the southwest Louisiana coast. The hurricane generated a surge of more than 4 meters than resuldated in flooding in several areas along the coast.
+This blog provides a simple example of change analysis using remotely sensed images from two dates. We use two images from the MODIS Terra Sensor (MOD09) to examine if the impact of Hurricane Rita is visible on the ground. Hurricane Rita is a category 3 hurricane that made landfall on September 24, 2005 in the southwest Louisiana coast. The hurricane generated a surge of more than 4 meters than resulted in flooding in several areas along the coast.
 
 I downloaded and processed MOD09 images for the date before and after hurricane Rita. The data was screened for unreliable pixels and aggregated at a 1km to deal with missing values (upcoming blogs on the flag processing!)
 
@@ -54,7 +54,7 @@ create_out_dir_param=TRUE #PARAM6
 infile_reflectance_date1 <- "mosaiced_MOD09A1_A2005265__006_reflectance_masked_RITA_reg_1km.tif" #PARAM 7
 infile_reflectance_date2 <- "mosaiced_MOD09A1_A2005273__006_reflectance_masked_RITA_reg_1km.tif" #PARAM 8
 
-new_strata_rita_10282017.shp
+infile_reg_outline <- "new_strata_rita_10282017.shp"
 
 ```
 
@@ -117,7 +117,7 @@ plotRGB(r_after,
 
 ```
 
-A second useful step is to generate a False color composite. This is similar to a Color Infrared (CIR) photography. This may be particularly useful since we use bands that may be affected by the presence of water on the ground. Vegetation is also often studied and which can affect spectral signal from vegtation. We generate a RGB false composite which requires identifying spectral bands corresponding to red (band 2: SWIR), green (band 4) and blue (band 1).
+A second useful step is to generate a False color composite. This is similar to a Color Infrared (CIR) photography. This may be particularly useful since we use bands that may be affected by the presence of water on the ground. Vegetation is also often studied and which can affect spectral signal from vegetation. We generate a RGB false composite which requires identifying spectral bands corresponding to red (band 2: SWIR), green (band 4) and blue (band 1).
 
 ```{r, echo=TRUE}
 
@@ -143,7 +143,7 @@ Visual inspection suggest some change areas especially visible in the false colo
 
 ### Generating Indices from the original bands: NDWI
 
-We use the original bands from MOD09 product to generate NDVI and NDWI indices the study of change. Indices are derived for both ebefore and after. There are different choices to generate a NDWI and we list from the literature: 
+We use the original bands from MOD09 product to generate NDVI and NDWI indices the study of change. Indices are derived for both before and after. There are different choices to generate a NDWI and we list from the literature: 
 
 1) NDVI = (NIR - Red)/(NIR+Red)
 2) NDWI =  (NIR - SWIR2)/(NIR + SWIR2)
@@ -159,10 +159,7 @@ NDVI is widely used to detect vegetation on the ground. We use here a modified f
 
 names(r_before)
 r_before_NDVI <- (r_before$NIR - r_before$Red) / (r_before$NIR + r_before$Red)
-r_after_NDVI <- subset(r_after,"NIR") - subset(r_after,"Red")/(subset(r_after,"NIR") + subset(r_after,"Red"))
-
-#r_before_NDWI <- (r_before$Red - r_before$SWIR2) / (r_before$Red + r_before$SWIR2)
-#r_after_NDWI <- (r_after$Red - r_after$SWIR2) / (r_after$Red + r_after$SWIR2)
+r_after_NDVI <- (r_after$NIR - r_after$Red)/(r_after$NIR + r_after$Red)
 
 r_before_NDWI <- (r_before$NIR - r_before$SWIR2) / (r_before$NIR + r_before$SWIR2)
 r_after_NDWI <- (r_after$NIR - r_after$SWIR2) / (r_after$NIR + r_after$SWIR2)
@@ -224,10 +221,10 @@ r_std <- (r_diff - cellStats(r_diff,"mean"))/cellStats(r_diff,"sd")
 threshold_val <- c(1.96,1.64)
 plot(r_std)
 hist(r_std)
-abline(v=threshold_val[1],col="red",tly=1)
-abline(v=-threshold_val[1],col="red",tly=1)
+abline(v=threshold_val[1],col="red",lty=1)
+abline(v=-threshold_val[1],col="red",lty=1)
 
-r_change_pos <- r_std > treshold_val[1]
+r_change_pos <- r_std > threshold_val[1]
 r_change_neg <- r_std < -threshold_val[1]
 
 plot(r_change_pos)
@@ -238,22 +235,73 @@ plot(r_change_neg)
 
 ### Generate a map of flooding with MNDWI and compare to FEMA map:
 
-r_after_flood <- r_diff_std > 1 
+r_after_flood <- r_std > 1 
 plot(r_after_flood)
 
 #reclass in zero/1!!!
-
-df <- data.frame(id=c(1,2), v=c(0,1))
-r_ref_rec <- subs(r_ref, df)
-plot(r_ref_rec)
-xtab_tb <- crosstab(r_after_flood,r_ref_rec)
-
 ## Examine overlap between flooded area and FEMA:
 
 plot(r_after_flood)
+
+
+xtab_tb <- crosstab(r_after_flood,r_ref)
+
 r_overlap <- r_ref_rec * r_after_flood
 plot(r_overlap) ## Flood map area of aggreement with FEMA
 
+reg_sf <- st_read(file.path(in_dir,infile_reg_outline))
+
+reg_sf <- st_transform(reg_sf,
+                       crs=projection(r_diff))
+reg_sp <-as(reg_sf, "Spatial") #Convert to sp object before rasterization
+
+reg_sp <- as(reg_sf,"Spatial")
+
+r_ref <- rasterize(reg_sp,
+                   r_diff,
+                   field="OBJECTID_3",
+                   fun="min")
+plot(r_ref) # zone 1 is flooded and zone 0 is not flooded
+
+xtab_tb <- crosstab(r_after_flood,r_ref)
+
+
+
+#### Let's examine a location within FEMA flooded zone and outside: use centroids
+centroids_sf <- st_centroid(reg_sf)
+
+df_before <- extract(r_before,centroids_sf)
+df_after <- extract(r_after,centroids_sf)
+
+### Plot values of bands before and after for flooded region:
+plot(df_before[2,],type="l")
+lines(df_after[2,],col="red")
+
+## Read band information since it is more informative!!
+df_modis_band_info <- read.table(file.path(in_dir_var,infile_modis_bands_information),
+                                 sep=",",
+                                 stringsAsFactors = F)
+print(df_modis_band_info)
+
+names(r_before) <- df_modis_band_info$band_name
+names(r_after) <- df_modis_band_info$band_name
+
+### Order band in terms of wavelenth:
+
+df_modis_band_info <- df_modis_band_info[order(df_modis_band_info$start_wlength),]
+#SWIR1 (1230–1250 nm), SWIR2 (1628–1652 nm) and SWIR3 (2105–2155 nm).
+band_refl_order <- df_modis_band_info$band_number
+
+plot(df_before[2,band_refl_order],type="l",
+     xlab="Bands",
+     ylab="Reflectance",
+     main="Reflectance profile for centroid of flooded area")
+lines(df_after[2,band_refl_order],col="red")
+names_vals <- c("Before Rita","After Rita")
+legend("topleft",legend=names_vals,
+       pt.cex=0.7,cex=0.7,col=c("black","red"),
+       lty=1, #add circle symbol to line
+       bty="n")
 ```
 
 ##############
