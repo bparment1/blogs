@@ -164,6 +164,14 @@ r_after_NDVI <- (r_after$NIR - r_after$Red)/(r_after$NIR + r_after$Red)
 r_before_NDWI <- (r_before$NIR - r_before$SWIR2) / (r_before$NIR + r_before$SWIR2)
 r_after_NDWI <- (r_after$NIR - r_after$SWIR2) / (r_after$NIR + r_after$SWIR2)
 
+#According to Gao (1996), NDWI is a good indicator for vegetation liquid water content and 
+# is less sensitive to atmospheric scattering effects than NDVI. In some studies, MODIS band 6 
+# is used for the NDWI calculation, because it is sensitive to water types and contents 
+# (Li et al., 2011), while band 5 is sensitive to vegetation liquid water content (Gao, 1996).
+
+r_before_NDWI <- (r_before$Green - r_before$SWIR2) / (r_before$Green + r_before$SWIR2)
+r_after_NDWI <- (r_after$Green - r_after$SWIR2) / (r_after$Green + r_after$SWIR2)
+
 r_NDWI_s <- stack(r_before_NDWI,r_after_NDWI)
 names_panel <- c("NDWI Before event","NDWI After event")
 levelplot(r_NDWI_s,
@@ -209,7 +217,8 @@ plot(r_rec_NDWI_after, main="After RITA, NDWI > 0.2")
 
 ### 2) Difference
 
-r_diff <- r_after_NDWI - r_before_NDWI
+#r_diff <- r_after_NDWI - r_before_NDWI
+r_diff <- r_after_NDVI - r_before_NDVI
 
 plot(r_diff)
 histogram(r_diff)
@@ -254,30 +263,32 @@ r_ref <- rasterize(reg_sp,
                    field="OBJECTID_3",
                    fun="min")
 
-r_var <- stack(r_after_NDVI,r_before_NDVI, r_before_NDWI,r_after_NDWI)
+r_var <- stack(r_before_NDVI,r_after_NDVI)
 names(r_var) <- c("NDVI_1","NDVI_2","NDWI_1","NDWI_2")
-zonal_var_df <- as.data.frame(t(zonal(x=r_var,z=r_ref,fun='mean')))
+#zonal_var_df <- as.data.frame(t(zonal(x=r_var,z=r_ref,fun='mean')))
 zonal_var_df <- as.data.frame(zonal(x=r_var,z=r_ref,fun='mean'))
 head(zonal_var_df)
-
 View(zonal_var_df)
-test <- gather(zonal_var_df,variable,value,NDVI_1:NDWI_2)
-head(test)
-View(test)
 
 test <- gather_(zonal_var_df,key="variable",value="value",names(r_var))
 test$date <- unlist(lapply(test$variable,FUN=function(x){strsplit(x,'["_"]')[[1]][2]}))
 test$index <- unlist(lapply(test$variable,FUN=function(x){strsplit(x,'["_"]')[[1]][1]}))
-View(test$date)
-strsplit(test$variable[3],'["_"]')[[1]][2]
 test$zone <- as.factor(test$zone)
 test$index <- as.factor(test$index)
-
+#
+View(test)
 xyplot(value~date|zone,groups="index",data=test, type = c('g', 'p'))
-xyplot(value~date|index,groups="zone",data=test, type = c('g', 'p'))
-
 xyplot(value~date|zone,data=test)
 
+xyplot(value~date|index,groups="zone",data=test, type = c('g', 'p'))
+test$index
+View(test)
+xyplot(value~date|zone,data=test)
+
+plot(value~index,data=subset(test,zone=1))
+plot(value~index,data=subset(test,zone=0))
+
+plot(value~date,data=subset(test,zone=1))
 ?xyplot
 
 View(test)
