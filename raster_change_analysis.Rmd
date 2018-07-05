@@ -195,11 +195,6 @@ zonal_var_df$date <- unlist(lapply(zonal_var_df$variable,
 zonal_var_df$zone <- as.factor(zonal_var_df$zone)
 xyplot(value~date|zone,data=zonal_var_df)
 
-#var_df <- as.data.frame(stack(r_var,r_diff,r_ref))
-#names(var_df) <- c("NDVI_1","NDVI_2","diff","zone")
-#boxplot(diff ~ zone,data=var_df)
-#mod_val <- lm(diff ~ zone,data=var_df)
-#plot(mod_val)
 
 ```
 
@@ -254,21 +249,16 @@ rclmat <- matrix(m, ncol=3, byrow=TRUE)
 r_impact2 <- reclassify(r_std,rclmat)
 
 r_impact <- stack(r_impact1,r_impact2)
+names(r_impact) <- c("r_impact1","r_impact2")
 
-### Now generate a plot of land cover with the NLCD legend and palette
-levelplot(r_impact2, 
-          #col.regions = c("grey","yellow","red"),
-          scales=list(draw=FALSE),
-          main = "NLCD 2006")
-
-### use ratify
-plot(r_impact)
-
-library(raster)
-
-plot(r_impact, legend = FALSE, col = c("grey","yellow","red"))
-legend("topright", legend = c("No change", "level 1", "level 2"), 
-       fill = c("grey","yellow","red"))
+# to place the legend outside the map
+par(xpd = FALSE)
+plot(r_impact, 
+     legend = FALSE, 
+     col = c("grey","yellow","red"))
+par(xpd = FALSE)
+legend(,x = 190, y = 80,legend = c("No change", "level 1", "level 2"), 
+       fill = c("grey","yellow","red"),cex = 0.7, inset = 0.9)
 
 
 ```
