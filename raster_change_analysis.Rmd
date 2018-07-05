@@ -177,11 +177,11 @@ FEMA that mapped area flooded by RITA. We use a vector file with zone=1 represen
 
 reg_sf <- st_read(file.path(in_dir,infile_reg_outline))
 reg_sf <- st_transform(reg_sf,
-                       crs=projection(r_diff))
+                       crs=projection(r_after_NDVI))
 reg_sp <-as(reg_sf, "Spatial") #Convert to sp object before rasterization
 reg_sp <- as(reg_sf,"Spatial")
 r_ref <- rasterize(reg_sp,
-                   r_diff,
+                   r_after_NDVI,
                    field="OBJECTID_3",
                    fun="min")
 
@@ -192,37 +192,23 @@ zonal_var_df <- as.data.frame(zonal(x=r_var,z=r_ref,fun='mean'))
 zonal_var_df <- gather_(zonal_var_df,key="variable",value="value",names(r_var))
 zonal_var_df$date <- unlist(lapply(zonal_var_df$variable,
                            FUN=function(x){strsplit(x,'["_"]')[[1]][2]}))
-zonal_var_df$zone <- as.factor(test$zone)
+zonal_var_df$zone <- as.factor(zonal_var_df$zone)
 xyplot(value~date|zone,data=zonal_var_df)
 
-var_df <- as.data.frame(stack(r_var,r_ref)
+#var_df <- as.data.frame(stack(r_var,r_diff,r_ref))
+#names(var_df) <- c("NDVI_1","NDVI_2","diff","zone")
+#boxplot(diff ~ zone,data=var_df)
+#mod_val <- lm(diff ~ zone,data=var_df)
+#plot(mod_val)
 
 ```
 
 
-We note that average NDVI drop by 0.1 in areas that were flooded while area not flooded had slight increase on average. 
-#
+We note that average NDVI drop by 0.1 in areas that were flooded while area not flooded had slight increase on average. In many cases, we do not have ancillary information on the area flooded and we need to generate those from the original images. We present below such analysis using difference images and by reclassifying the image into damage classes.
 
 
 ```{r}
 
-
-##### How do we map change related to event?
-
-### Lower NIR often correlates to areas with high water fraction or inundated:
-
-#1) Simple thresholding
-#2) Difference 
-#3) PCA
-
-### 1) Simple thresholding: Check for low NDVI
-
-r_rec_before <- r_before_NDVI < 0.2
-r_rec_after <- r_before_NDVI < 0.2
-
-### THis is suggesting flooding!!!
-plot(r_rec_before, main="Before RITA, NDVI < 0.2")
-plot(r_rec_after, main="After RITA, NDVI < 0.2")
 
 ### 2) Image Difference with two dates
 
@@ -232,53 +218,58 @@ r_diff <- r_after_NDVI - r_before_NDVI
 plot(r_diff)
 histogram(r_diff)
 
+### We geneate damage maps in two ways:
+
+#### Now using the original values:
+
+m <- c(-0.1, 10, 0,
+       -0.3, -0.1, 1,  
+       -10, -0.3, 2)
+
+rclmat <- matrix(m, ncol=3, byrow=TRUE)
+#shapiro.test(as.vector(r_diff))
+r_impact1 <- reclassify(r_diff,rclmat)
+### Reclass in impact level: 1-2 using threshold levels
+plot(r_impact1)
+
+### Now using the distribution:
+
 mean_val <- cellStats(r_diff,"mean")
 std_val <- cellStats(r_diff,"sd")
 
-r_std <- (r_diff - )/cellStats(r_diff,"sd")
+r_std <- (r_diff - mean_val)/std_val
+
 threshold_val <- c(1.96,1.64)
 plot(r_std)
 hist(r_std)
 abline(v=threshold_val[1],col="red",lty=1)
 abline(v=-threshold_val[1],col="red",lty=1)
 
-r_change_pos <- r_std > threshold_val[1]
-r_change_neg <- r_std < -threshold_val[1]
-
-plot(r_change_pos)
-plot(r_change_neg)
-
-?reclassify()
-m <- c(0, 0.25, 1,
-       0.25, 0.5, 2,  
-       0.5, 1, 3)
-
-m <- c(-0.1, 10, 0,
-       -0.3, -0.1, 1,  
-       -10, -0.3, 2)
-
+m <- c(-1.64, 10, 0,
+       -1.96, -1.64, 1,  
+       -10, -1.96,2)
 
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 #shapiro.test(as.vector(r_diff))
-r_impact <- reclassify(r_diff,rclmat)
-### Reclass in impact level: 1-2 using threshold levels
+r_impact2 <- reclassify(r_std,rclmat)
+
+r_impact <- stack(r_impact1,r_impact2)
+
+### Now generate a plot of land cover with the NLCD legend and palette
+levelplot(r_impact2, 
+          #col.regions = c("grey","yellow","red"),
+          scales=list(draw=FALSE),
+          main = "NLCD 2006")
+
+### use ratify
 plot(r_impact)
-#Compare to actual flooding data
-#freq_fema_zones <- as.data.frame(freq(r_ref))
-#xtab_threshold <- crosstab(r_ref,r_rec_NIR_after,long=T)
 
-## % overlap between the flooded area and values below 0.2 in NIR
-#(xtab_threshold[5,3]/freq_fema_zones[2,2])*100 #agreement with FEMA flooded area in %.
+library(raster)
 
-### Generate a map of flooding with MNDWI and compare to FEMA map:
+plot(r_impact, legend = FALSE, col = c("grey","yellow","red"))
+legend("topright", legend = c("No change", "level 1", "level 2"), 
+       fill = c("grey","yellow","red"))
 
-r_after_flood <- r_std > 1 
-plot(r_after_flood)
-
-#reclass in zero/1!!!
-## Examine overlap between flooded area and FEMA:
-
-plot(r_after_flood)
 
 ```
 ##############
