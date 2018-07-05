@@ -175,7 +175,6 @@ FEMA that mapped area flooded by RITA. We use a vector file with zone=1 represen
 
 ```{r,echo=T}
 
-
 reg_sf <- st_read(file.path(in_dir,infile_reg_outline))
 reg_sf <- st_transform(reg_sf,
                        crs=projection(r_diff))
@@ -188,56 +187,20 @@ r_ref <- rasterize(reg_sp,
 
 r_var <- stack(r_before_NDVI,r_after_NDVI)
 names(r_var) <- c("NDVI_1","NDVI_2")
-#zonal_var_df <- as.data.frame(t(zonal(x=r_var,z=r_ref,fun='mean')))
 zonal_var_df <- as.data.frame(zonal(x=r_var,z=r_ref,fun='mean'))
-head(zonal_var_df)
-View(zonal_var_df)
 
-test <- gather_(zonal_var_df,key="variable",value="value",names(r_var))
-test$date <- unlist(lapply(test$variable,FUN=function(x){strsplit(x,'["_"]')[[1]][2]}))
-#test$index <- unlist(lapply(test$variable,FUN=function(x){strsplit(x,'["_"]')[[1]][1]}))
-test$zone <- as.factor(test$zone)
-#test$index <- as.factor(test$index)
-#
-View(test)
-xyplot(value~date|zone,groups="index",data=test, type = c('g', 'p'))
-xyplot(value~date|zone,data=test)
+zonal_var_df <- gather_(zonal_var_df,key="variable",value="value",names(r_var))
+zonal_var_df$date <- unlist(lapply(zonal_var_df$variable,
+                           FUN=function(x){strsplit(x,'["_"]')[[1]][2]}))
+zonal_var_df$zone <- as.factor(test$zone)
+xyplot(value~date|zone,data=zonal_var_df)
 
-xyplot(value~date|index,groups="zone",data=test, type = c('g', 'p'))
-test$index
-View(test)
-xyplot(value~date|zone,data=test)
-
-plot(value~index,data=subset(test,zone=1))
-plot(value~index,data=subset(test,zone=0))
-
-plot(value~date,data=subset(test,zone=1))
-?xyplot
-
-View(test)
-names(zonal_var_df)
-?gather
-plot(zonal_var_df$V1)
-?mutate
-View(NDVI_df)
-
-?group
-
-head(NDVI_df)
-
-plot()
-xtab_tb <- crosstab(r_after_flood,r_ref)
-
-r_overlap <- r_ref_rec * r_after_flood
-plot(r_overlap) ## Flood map area of aggreement with FEMA
-
-
-plot(r_ref) # zone 1 is flooded and zone 0 is not flooded
-
-xtab_tb <- crosstab(r_after_flood,r_ref)
+var_df <- as.data.frame(stack(r_var,r_ref)
 
 ```
 
+
+We note that average NDVI drop by 0.1 in areas that were flooded while area not flooded had slight increase on average. 
 #
 
 
@@ -291,15 +254,15 @@ m <- c(0, 0.25, 1,
        0.5, 1, 3)
 
 m <- c(-0.1, 10, 0,
-       -0.1, -0.3, 1,  
-       -0.3, -10, 2)
+       -0.3, -0.1, 1,  
+       -10, -0.3, 2)
 
 
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 #shapiro.test(as.vector(r_diff))
 r_impact <- reclassify(r_diff,rclmat)
 ### Reclass in impact level: 1-2 using threshold levels
-
+plot(r_impact)
 #Compare to actual flooding data
 #freq_fema_zones <- as.data.frame(freq(r_ref))
 #xtab_threshold <- crosstab(r_ref,r_rec_NIR_after,long=T)
