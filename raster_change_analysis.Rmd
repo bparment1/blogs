@@ -97,8 +97,6 @@ A first step in the change analysis is to visually inspect for change using band
 #### Generate Color composites
 ### True color composite
 
-# 4 figures arranged in 2 rows and 2 columns
-#attach(mtcars)
 par(mfrow=c(2,1))
 
 plotRGB(r_before,
@@ -251,15 +249,30 @@ r_impact2 <- reclassify(r_std,rclmat)
 r_impact <- stack(r_impact1,r_impact2)
 names(r_impact) <- c("r_impact1","r_impact2")
 
+par(mfrow=c(2,1))
+
+plot(r_impact1, 
+     legend = FALSE, 
+     col = c("grey","yellow","red"))
+
+plot(r_impact1, 
+     legend = FALSE, 
+     col = c("grey","yellow","red"))
+
 # to place the legend outside the map
 par(xpd = FALSE)
 plot(r_impact, 
      legend = FALSE, 
      col = c("grey","yellow","red"))
 par(xpd = FALSE)
-legend(,x = 190, y = 80,legend = c("No change", "level 1", "level 2"), 
+legend(x = 1, y = 1,legend = c("No change", "level 1", "level 2"), 
        fill = c("grey","yellow","red"),cex = 0.7, inset = 0.9)
 
+levelplot(r_impact1,
+          col.regions=c("grey","yellow","red"))
+
+levelplot(r_impact2,
+          col.regions=c("grey","yellow","red"))
 
 ```
 ##############
