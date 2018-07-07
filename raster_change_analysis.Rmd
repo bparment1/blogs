@@ -25,7 +25,7 @@ library(tidyr)
 
 ## Raster Change analysis with Two dates: Hurricane RITA
 
-This blog provides a simple example of change analysis using remotely sensed images from two dates. We use two images from the MODIS Terra Sensor (MOD09) to examine if the impact of Hurricane Rita is visible on the ground. Hurricane Rita is a category 3 hurricane that made landfall on September 24, 2005 in the southwest Louisiana coast. The hurricane generated a surge of more than 4 meters than resulted in flooding in several areas along the coast.
+This blog provides a simple example of change detection analysis using remotely sensed images from two dates. We use two images from the MODIS Terra Sensor (MOD09) to examine if the impact of Hurricane Rita is visible on the ground. Hurricane Rita was a category 3 hurricane that made landfall on September 24, 2005 in the southwest Louisiana coast. The hurricane generated a surge of more than 4 meters than resulted in flooding in several areas along the coast.
 
 I downloaded and processed MOD09 images for the date before and after hurricane Rita. The data was screened for unreliable pixels and aggregated at a 1km to deal with missing values (upcoming blogs on the flag processing!)
 
@@ -86,7 +86,7 @@ plot(r_after)
 
 ```
 
-We note that Near Infrared and Short Wave Infrared (SWIR1 and SWIR2) often high contrast between vegetated areas and water. These bands also display changes in areas in near the coast.
+We note that Red, Near Infrared and Short Wave Infrared (SWIR1 and SWIR2) offer high contrast between vegetated areas and water. These bands also display changes in areas near the coast.
 
 ### Visualization of impact using true and false color composites.
 
@@ -143,12 +143,11 @@ Visual inspection suggest some change areas especially visible in the false colo
 
 ### Generating Indices from the original bands: NDWI
 
-We use the original bands from MOD09 product to generate NDVI and NDWI indices the study of change. Indices are derived for both before and after. There are different choices to generate a NDWI and we list from the literature: 
+We use the original bands from MOD09 product to generate NDVI indices to detect changes in vegetation response. Indices are derived for both before and after. NDVI is generated using the Red and Near Infrared (NIR) bands:
 
-1) NDVI = (NIR - Red)/(NIR+Red)
-2) NDWI =  (NIR - SWIR2)/(NIR + SWIR2)
+NDVI = (NIR - Red)/(NIR+Red)
 
-NDVI is widely used to detect vegetation on the ground and sometimes to examine the impact of hurricanes on local forest and flooding.We generated indices for both dates and plot maps on the same scale using the levelplot function from RasterVis.
+NDVI is widely used to detect vegetation on the ground and sometimes to examine the impact of hurricanes on local forest and flooding. We generated indices for both dates and plot maps on the same scale using the levelplot function from RasterVis.
 
 ```{r,echo=TRUE}
 
@@ -168,7 +167,7 @@ levelplot(r_NDVI_s,
 
 ```
 
-Comparison of before and after NDVI suggest a general drop in NDVI for the region while the NDWI indicate some additional pockets of water near the coasts. This visual comparison is interesting but let  us check with data from 
+Comparison of before and after NDVI images suggest a general drop in NDVI for the region while the NDWI indicate some additional pockets of water near the coasts. This visual comparison is interesting but let  us check with data from 
 FEMA that mapped area flooded by RITA. We use a vector file with zone=1 representing flooding and zone=0 no flooding.
 
 ```{r,echo=T}
@@ -196,9 +195,9 @@ xyplot(value~date|zone,data=zonal_var_df)
 
 ```
 
+Using FEMA daata, we found that on average, NDVI dropped by 0.1 in areas that were flooded while other areas displayed a slight increase. In many cases, we do not have ancillary information on the areas flooded and we need to generate those from the original images. We present below such analysis using difference images and by reclassifying the image into impact classes.
 
-We note that average NDVI drop by 0.1 in areas that were flooded while area not flooded had slight increase on average. In many cases, we do not have ancillary information on the area flooded and we need to generate those from the original images. We present below such analysis using difference images and by reclassifying the image into damage classes.
-
+Let's generate a difference image using NDVI before and after the Hurricane event:
 
 ```{r}
 
@@ -211,6 +210,30 @@ r_diff <- r_after_NDVI - r_before_NDVI
 plot(r_diff)
 histogram(r_diff)
 
+```
+
+##### Classifying differences in impact/damage classes
+
+We generate two different impact maps with two reclassificiation procedures:
+- based on the original difference values
+- based on the standardized difference values
+
+In the first procedure, we assign positive and low decreases in NDVI value 0 (no change), level 1 decrease in NDVI (low intensity) for range [-0.3,0.1] while level 2 decrease (higher impact from higher intensity).
+
+We keep the same labels in the second procedure but use different thresholds. We standarize the difference image using the mean and standard deviation values. We generate the three classes using different threshold assuming a normal distribution as often shown in the scientific literature. Both methods are summarized in the table below:
+
+no change: [-1.64, 10] 0
+low impact: [-1.96, -1.64]
+high impact: [-10, -1.96]
+
+label       Threshold min    Threshold max    value
+--------   --------------   ---------------- --------
+no change      -1.64          10              0
+low impact     -1.96          -1.64           1
+high impact    -10            -1.96           2
+---------  --------------   ---------------- ------
+
+```{r}
 ### We geneate damage maps in two ways:
 
 #### Now using the original values:
@@ -249,33 +272,35 @@ r_impact2 <- reclassify(r_std,rclmat)
 r_impact <- stack(r_impact1,r_impact2)
 names(r_impact) <- c("r_impact1","r_impact2")
 
+legend_val <- c("No change", "level 1", "level 2")
+col_val <-  c("grey","yellow","red")
+
 par(mfrow=c(2,1))
 
 plot(r_impact1, 
-     legend = FALSE, 
-     col = c("grey","yellow","red"))
+     col = col_val,
+     axes=F,
+     legend=F)
 
-plot(r_impact1, 
-     legend = FALSE, 
-     col = c("grey","yellow","red"))
+legend('topright',
+       legend = legend_val ,
+       pt.cex=0.8,cex=0.8,
+       fill=col_val,
+       bty="n") 
 
-# to place the legend outside the map
-par(xpd = FALSE)
-plot(r_impact, 
-     legend = FALSE, 
-     col = c("grey","yellow","red"))
-par(xpd = FALSE)
-legend(x = 1, y = 1,legend = c("No change", "level 1", "level 2"), 
-       fill = c("grey","yellow","red"),cex = 0.7, inset = 0.9)
+plot(r_impact2, 
+     col = col_val,
+     axes=F,
+     legend=F)
 
-levelplot(r_impact1,
-          col.regions=c("grey","yellow","red"))
+legend('topright',
+       legend = legend_val ,
+       pt.cex=0.8,cex=0.8,
+       fill=col_val,
+       bty="n") 
 
-levelplot(r_impact2,
-          col.regions=c("grey","yellow","red"))
 
 ```
-##############
 
 
 
