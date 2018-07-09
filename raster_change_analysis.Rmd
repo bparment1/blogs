@@ -1,12 +1,10 @@
 ---
-title: "Raster Change Analysis with two images"
+title: "Raster Change Detection Analysis with two images"
 author: "Benoit Parmentier"
 date: "7/15/2018"
-output: 
-  html_document:
-    #theme: null
-    #highlight: null
-    #css: styles.css
+output:
+  word_document: default
+  html_document: null
 ---
 
 ```{r setup, include=FALSE}
@@ -70,10 +68,6 @@ Note that the bands are not ordered in the order of their spectral wavelengths.
 
 ```{r }
 
-###############################################
-##### PART III: Band combination: Indices and thresholding for flood mapping ##############
-
-  
 ###### Read in MOD09 reflectance images before and after Hurrican Rita.
 r_before <- brick(file.path(in_dir,infile_reflectance_date1)) # Before RITA, Sept. 22, 2005.
 r_after <- brick(file.path(in_dir,infile_reflectance_date2)) # After RITA, Sept 30, 2005.
@@ -151,9 +145,6 @@ NDVI is widely used to detect vegetation on the ground and sometimes to examine 
 
 ```{r,echo=TRUE}
 
-############## Generating indices based on raster algebra of original bands
-## Let's generate a NDVI and a version of NDWI adapted to MODIS:
-
 names(r_before)
 r_before_NDVI <- (r_before$NIR - r_before$Red) / (r_before$NIR + r_before$Red)
 r_after_NDVI <- (r_after$NIR - r_after$Red)/(r_after$NIR + r_after$Red)
@@ -184,6 +175,8 @@ r_ref <- rasterize(reg_sp,
 
 r_var <- stack(r_before_NDVI,r_after_NDVI)
 names(r_var) <- c("NDVI_1","NDVI_2")
+r_var <- mask(r_var,r_ref)
+
 zonal_var_df <- as.data.frame(zonal(x=r_var,z=r_ref,fun='mean'))
 
 zonal_var_df <- gather_(zonal_var_df,key="variable",value="value",names(r_var))
@@ -192,39 +185,26 @@ zonal_var_df$date <- unlist(lapply(zonal_var_df$variable,
 zonal_var_df$zone <- as.factor(zonal_var_df$zone)
 xyplot(value~date|zone,data=zonal_var_df)
 
+plot(r_ref,main="FEMA flooding map")
 
 ```
 
-Using FEMA daata, we found that on average, NDVI dropped by 0.1 in areas that were flooded while other areas displayed a slight increase. In many cases, we do not have ancillary information on the areas flooded and we need to generate those from the original images. We present below such analysis using difference images and by reclassifying the image into impact classes.
+Using FEMA data, we found that on average, NDVI dropped by 0.1 in areas that were flooded while other areas displayed a slight increase. In many cases, we do not have ancillary information on the areas flooded and we need to generate those from the original images. We present below such analysis using difference images and by reclassifying the image into impact classes.
 
 Let's generate a difference image using NDVI before and after the Hurricane event:
 
 ```{r}
 
-
-### 2) Image Difference with two dates
-
-#r_diff <- r_after_NDWI - r_before_NDWI
-r_diff <- r_after_NDVI - r_before_NDVI
+r_diff <- r_var$NDVI_2 - r_var$NDVI_1
 
 plot(r_diff)
 histogram(r_diff)
 
 ```
 
-##### Classifying differences in impact/damage classes
+### Classifying differences in impact/damage classes
 
-We generate two different impact maps with two reclassificiation procedures:
-- based on the original difference values
-- based on the standardized difference values
-
-In the first procedure, we assign positive and low decreases in NDVI value 0 (no change), level 1 decrease in NDVI (low intensity) for range [-0.3,0.1] while level 2 decrease (higher impact from higher intensity).
-
-We keep the same labels in the second procedure but use different thresholds. We standarize the difference image using the mean and standard deviation values. We generate the three classes using different threshold assuming a normal distribution as often shown in the scientific literature. Both methods are summarized in the table below:
-
-no change: [-1.64, 10] 0
-low impact: [-1.96, -1.64]
-high impact: [-10, -1.96]
+We will use a method often use in the scientific literature using a standardized difference image. We generate mean and standard deviation for the difference raster and reclassify the standardized difference image using thresholds assuming a normal distribution. The limits of classes are summarized in the table below:
 
 label       Threshold min    Threshold max    value
 --------   --------------   ---------------- --------
@@ -233,22 +213,8 @@ low impact     -1.96          -1.64           1
 high impact    -10            -1.96           2
 ---------  --------------   ---------------- ------
 
+
 ```{r}
-### We geneate damage maps in two ways:
-
-#### Now using the original values:
-
-m <- c(-0.1, 10, 0,
-       -0.3, -0.1, 1,  
-       -10, -0.3, 2)
-
-rclmat <- matrix(m, ncol=3, byrow=TRUE)
-#shapiro.test(as.vector(r_diff))
-r_impact1 <- reclassify(r_diff,rclmat)
-### Reclass in impact level: 1-2 using threshold levels
-plot(r_impact1)
-
-### Now using the distribution:
 
 mean_val <- cellStats(r_diff,"mean")
 std_val <- cellStats(r_diff,"sd")
@@ -257,7 +223,8 @@ r_std <- (r_diff - mean_val)/std_val
 
 threshold_val <- c(1.96,1.64)
 plot(r_std)
-hist(r_std)
+hist(r_std,
+    main="Standardized difference")
 abline(v=threshold_val[1],col="red",lty=1)
 abline(v=-threshold_val[1],col="red",lty=1)
 
@@ -267,10 +234,42 @@ m <- c(-1.64, 10, 0,
 
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 #shapiro.test(as.vector(r_diff))
-r_impact2 <- reclassify(r_std,rclmat)
+r_impact1 <- reclassify(r_std,rclmat)
+freq(r_ref)
+freq(r_impact1)
 
-r_impact <- stack(r_impact1,r_impact2)
-names(r_impact) <- c("r_impact1","r_impact2")
+```
+
+Let's now visualize the output and compute the area for each category. Results indicate that few pixels are selected as highly impacted and that we may be underestimating the flooded area. 
+
+Options may be to change the threshold to 1 standard deviation or change use different thresholds using the original difference image. Given that our assumption that we follow a normal distribution is probably unwise (note the shoulder in the histogram of distribution and qqplot) we will use simple thresholding and reclassification.
+
+```{r}
+qqnorm(values(r_std))
+abline(0, 1)
+
+```
+
+In the second procedure, we assign positive and low decreases in NDVI value 0 (no change), level 1 decrease in NDVI (low impact) for range [-0.3,0.1] while level 2 decrease (higher impact from higher intensity).
+
+label       Threshold min    Threshold max    value
+--------   --------------   ---------------- --------
+no change      -0.1           10              0
+low impact     -0.3          -0.1             1
+high impact    -10           -0.3             2
+---------  --------------   ---------------- ------
+
+We keep the same labels in the second procedure but use different thresholds.
+
+```{r}
+m <- c(-0.1, 10, 0,
+       -0.3, -0.1, 1,  
+       -10, -0.3, 2)
+rclmat <- matrix(m, ncol=3, byrow=TRUE)
+
+r_impact2 <- reclassify(r_diff,rclmat)
+
+freq(r_impact2)
 
 legend_val <- c("No change", "level 1", "level 2")
 col_val <-  c("grey","yellow","red")
@@ -302,5 +301,7 @@ legend('topright',
 
 ```
 
+## Conclusions
 
+We carried out a simple change detection analysis using MODIS09 product aggregated at 1km resolution. We found that we are able to find changes related to the hurricane RITA most notably decrease in NDVI near coastal areas. We used two common thresholding techniques used by researchers and found some matching with the FEMA flood map but with underestimation. The analysis could be refined by using different thresholding and accounting for the vegetation and flood seasonality in the data. This may be a topic for a new blog!
 
