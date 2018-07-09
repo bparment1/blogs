@@ -1,0 +1,307 @@
+---
+title: "Raster Change Detection Analysis with two images"
+author: "Benoit Parmentier"
+date: "7/15/2018"
+output:
+  word_document: default
+  html_document: null
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sp) # spatial/geographfic objects and functions
+library(rasterVis) # raster visualization operations
+library(raster) # raster functionalities
+library(rgeos) #contains topological operations
+library(sf) # spatial objects classes
+library(plotrix) #various graphic functions e.g. draw.circle
+library(colorRamps) #contains matlab.like color palette
+library(dplyr)
+library(tidyr)
+
+```
+
+## Raster Change analysis with Two dates: Hurricane RITA
+
+This blog provides a simple example of change detection analysis using remotely sensed images from two dates. We use two images from the MODIS Terra Sensor (MOD09) to examine if the impact of Hurricane Rita is visible on the ground. Hurricane Rita was a category 3 hurricane that made landfall on September 24, 2005 in the southwest Louisiana coast. The hurricane generated a surge of more than 4 meters than resulted in flooding in several areas along the coast.
+
+I downloaded and processed MOD09 images for the date before and after hurricane Rita. The data was screened for unreliable pixels and aggregated at a 1km to deal with missing values (upcoming blogs on the flag processing!)
+
+### Setting up input parameters and directories
+
+First let us set up the input directories. It is good practice to concentrate all the variables and input parameters at the
+start of the script. We also create an output directory that can change for each analysis (using output suffix as identifier).
+
+
+```{r }
+
+############################################################################
+#####  Parameters and argument set up ###########
+
+#Note: https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/20170008750.pdf
+out_suffix <- "change_" #output suffix for the files and ouptut folder #param 1
+
+#in_dir <- "./blogs/blog1_basic_change_analysis/data/"
+#out_dir <- "./blogs/blog1_basic_change_analysis/outputs"
+
+in_dir <- "/nfs/bparmentier-data/Data/blogs/blog1_basic_change_analysis/data/"
+out_dir <- "/nfs/bparmentier-data/Data/blogs/blog1_basic_change_analysis/outputs"
+
+file_format <- ".tif" #PARAM 4
+NA_flag_val <- -9999 #PARAM 5
+create_out_dir_param=TRUE #PARAM6
+
+infile_reflectance_date1 <- "mosaiced_MOD09A1_A2005265__006_reflectance_masked_RITA_reg_1km.tif" #PARAM 7
+infile_reflectance_date2 <- "mosaiced_MOD09A1_A2005273__006_reflectance_masked_RITA_reg_1km.tif" #PARAM 8
+
+infile_reg_outline <- "new_strata_rita_10282017.shp"
+
+```
+
+
+### Reading in rasters and visualizing bands
+
+We then load in the input images. We chose the dates closest to the hurricane event. The first date corresponds to September 22, 2005 (before event) and the second date to September 30 2005 (after event). We use a brick and assign the corresponding
+band names. MOD09 product contains seven bands spanning the optical spectrum. More information can be found at https://lpdaac.usgs.gov/dataset_discovery/modis/modis_products_table
+
+Note that the bands are not ordered in the order of their spectral wavelengths.
+
+```{r }
+
+###### Read in MOD09 reflectance images before and after Hurrican Rita.
+r_before <- brick(file.path(in_dir,infile_reflectance_date1)) # Before RITA, Sept. 22, 2005.
+r_after <- brick(file.path(in_dir,infile_reflectance_date2)) # After RITA, Sept 30, 2005.
+
+names(r_before) <- c("Red","NIR","Blue","Green","SWIR1","SWIR2","SWIR3")
+names(r_after) <- c("Red","NIR","Blue","Green","SWIR1","SWIR2","SWIR3")
+
+plot(r_before)
+plot(r_after)
+
+```
+
+We note that Red, Near Infrared and Short Wave Infrared (SWIR1 and SWIR2) offer high contrast between vegetated areas and water. These bands also display changes in areas near the coast.
+
+### Visualization of impact using true and false color composites.
+
+A first step in the change analysis is to visually inspect for change using bands combination. We generate color composites using RGB color compositing which requires identifying spectral bands corresponding to red (band 1), green (band 4) and blue (band 1).This generates a true color composite image similar to a color photography.
+
+```{r , echo=TRUE}
+
+#### Generate Color composites
+### True color composite
+
+par(mfrow=c(2,1))
+
+plotRGB(r_before,
+        r=1,
+        g=4,
+        b=3,
+        scale=0.6,
+        stretch="hist",
+        main="before")
+
+plotRGB(r_after,
+        r=1,
+        g=4,
+        b=3,
+        scale=0.6,
+        stretch="hist",
+        main="after")
+
+```
+
+A second useful step is to generate a False color composite. This is similar to a Color Infrared (CIR) photography. This may be particularly useful since we use bands that may be affected by the presence of water on the ground. Vegetation is also often studied and which can affect spectral signal from vegetation. We generate a RGB false composite which requires identifying spectral bands corresponding to red (band 2: SWIR), green (band 4) and blue (band 1).
+
+```{r, echo=TRUE}
+
+### False color composite:
+par(mfrow=c(2,1))
+plotRGB(r_before,
+        r=2,
+        g=1,
+        b=4,
+        scale=0.6,
+        stretch="hist")
+
+plotRGB(r_after,
+        r=2,
+        g=1,
+        b=4,
+        scale=0.6,
+        stretch="hist")
+
+```
+
+Visual inspection suggest some change areas especially visible in the false color composite towards the coast the South East part of the study area. The next will be to quantitavely assess where changes occurs. We will use specific spectral bands combinations (indices) to focus on specific features from the ground. 
+
+### Generating Indices from the original bands: NDWI
+
+We use the original bands from MOD09 product to generate NDVI indices to detect changes in vegetation response. Indices are derived for both before and after. NDVI is generated using the Red and Near Infrared (NIR) bands:
+
+NDVI = (NIR - Red)/(NIR+Red)
+
+NDVI is widely used to detect vegetation on the ground and sometimes to examine the impact of hurricanes on local forest and flooding. We generated indices for both dates and plot maps on the same scale using the levelplot function from RasterVis.
+
+```{r,echo=TRUE}
+
+names(r_before)
+r_before_NDVI <- (r_before$NIR - r_before$Red) / (r_before$NIR + r_before$Red)
+r_after_NDVI <- (r_after$NIR - r_after$Red)/(r_after$NIR + r_after$Red)
+
+r_NDVI_s <- stack(r_before_NDVI,r_after_NDVI)
+names_panel <- c("NDVI Before Event","NDVI After Event")
+levelplot(r_NDVI_s,
+          names.attr = names_panel,
+          col.regions=rev(terrain.colors(255)))
+
+
+```
+
+Comparison of before and after NDVI images suggest a general drop in NDVI for the region while the NDWI indicate some additional pockets of water near the coasts. This visual comparison is interesting but let  us check with data from 
+FEMA that mapped area flooded by RITA. We use a vector file with zone=1 representing flooding and zone=0 no flooding.
+
+```{r,echo=T}
+
+reg_sf <- st_read(file.path(in_dir,infile_reg_outline))
+reg_sf <- st_transform(reg_sf,
+                       crs=projection(r_after_NDVI))
+reg_sp <-as(reg_sf, "Spatial") #Convert to sp object before rasterization
+reg_sp <- as(reg_sf,"Spatial")
+r_ref <- rasterize(reg_sp,
+                   r_after_NDVI,
+                   field="OBJECTID_3",
+                   fun="min")
+
+r_var <- stack(r_before_NDVI,r_after_NDVI)
+names(r_var) <- c("NDVI_1","NDVI_2")
+r_var <- mask(r_var,r_ref)
+
+zonal_var_df <- as.data.frame(zonal(x=r_var,z=r_ref,fun='mean'))
+
+zonal_var_df <- gather_(zonal_var_df,key="variable",value="value",names(r_var))
+zonal_var_df$date <- unlist(lapply(zonal_var_df$variable,
+                           FUN=function(x){strsplit(x,'["_"]')[[1]][2]}))
+zonal_var_df$zone <- as.factor(zonal_var_df$zone)
+xyplot(value~date|zone,data=zonal_var_df)
+
+plot(r_ref,main="FEMA flooding map")
+
+```
+
+Using FEMA data, we found that on average, NDVI dropped by 0.1 in areas that were flooded while other areas displayed a slight increase. In many cases, we do not have ancillary information on the areas flooded and we need to generate those from the original images. We present below such analysis using difference images and by reclassifying the image into impact classes.
+
+Let's generate a difference image using NDVI before and after the Hurricane event:
+
+```{r}
+
+r_diff <- r_var$NDVI_2 - r_var$NDVI_1
+
+plot(r_diff)
+histogram(r_diff)
+
+```
+
+### Classifying differences in impact/damage classes
+
+We will use a method often use in the scientific literature using a standardized difference image. We generate mean and standard deviation for the difference raster and reclassify the standardized difference image using thresholds assuming a normal distribution. The limits of classes are summarized in the table below:
+
+label       Threshold min    Threshold max    value
+--------   --------------   ---------------- --------
+no change      -1.64          10              0
+low impact     -1.96          -1.64           1
+high impact    -10            -1.96           2
+---------  --------------   ---------------- ------
+
+
+```{r}
+
+mean_val <- cellStats(r_diff,"mean")
+std_val <- cellStats(r_diff,"sd")
+
+r_std <- (r_diff - mean_val)/std_val
+
+threshold_val <- c(1.96,1.64)
+plot(r_std)
+hist(r_std,
+    main="Standardized difference")
+abline(v=threshold_val[1],col="red",lty=1)
+abline(v=-threshold_val[1],col="red",lty=1)
+
+m <- c(-1.64, 10, 0,
+       -1.96, -1.64, 1,  
+       -10, -1.96,2)
+
+rclmat <- matrix(m, ncol=3, byrow=TRUE)
+#shapiro.test(as.vector(r_diff))
+r_impact1 <- reclassify(r_std,rclmat)
+freq(r_ref)
+freq(r_impact1)
+
+```
+
+Let's now visualize the output and compute the area for each category. Results indicate that few pixels are selected as highly impacted and that we may be underestimating the flooded area. 
+
+Options may be to change the threshold to 1 standard deviation or change use different thresholds using the original difference image. Given that our assumption that we follow a normal distribution is probably unwise (note the shoulder in the histogram of distribution and qqplot) we will use simple thresholding and reclassification.
+
+```{r}
+qqnorm(values(r_std))
+abline(0, 1)
+
+```
+
+In the second procedure, we assign positive and low decreases in NDVI value 0 (no change), level 1 decrease in NDVI (low impact) for range [-0.3,0.1] while level 2 decrease (higher impact from higher intensity).
+
+label       Threshold min    Threshold max    value
+--------   --------------   ---------------- --------
+no change      -0.1           10              0
+low impact     -0.3          -0.1             1
+high impact    -10           -0.3             2
+---------  --------------   ---------------- ------
+
+We keep the same labels in the second procedure but use different thresholds.
+
+```{r}
+m <- c(-0.1, 10, 0,
+       -0.3, -0.1, 1,  
+       -10, -0.3, 2)
+rclmat <- matrix(m, ncol=3, byrow=TRUE)
+
+r_impact2 <- reclassify(r_diff,rclmat)
+
+freq(r_impact2)
+
+legend_val <- c("No change", "level 1", "level 2")
+col_val <-  c("grey","yellow","red")
+
+par(mfrow=c(2,1))
+
+plot(r_impact1, 
+     col = col_val,
+     axes=F,
+     legend=F)
+
+legend('topright',
+       legend = legend_val ,
+       pt.cex=0.8,cex=0.8,
+       fill=col_val,
+       bty="n") 
+
+plot(r_impact2, 
+     col = col_val,
+     axes=F,
+     legend=F)
+
+legend('topright',
+       legend = legend_val ,
+       pt.cex=0.8,cex=0.8,
+       fill=col_val,
+       bty="n") 
+
+
+```
+
+## Conclusions
+
+We carried out a simple change detection analysis using MODIS09 product aggregated at 1km resolution. We found that we are able to find changes related to the hurricane RITA most notably decrease in NDVI near coastal areas. We used two common thresholding techniques used by researchers and found some matching with the FEMA flood map but with underestimation. The analysis could be refined by using different thresholding and accounting for the vegetation and flood seasonality in the data. This may be a topic for a new blog!
+
