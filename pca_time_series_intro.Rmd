@@ -41,6 +41,9 @@ library(colorRamps) # contains matlab.like color palette
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(psych) #pca/eigenvector decomposition functionalities
+library(xts)
+library(zoo)
 ```
 
 ## Principal Component Analysis with Time Series
@@ -91,7 +94,12 @@ lf <- list.files(pattern=pattern_str,
 r_stack <- stack(lf)
 plot(r_stack,y=1)
 plot(r_ref)
-r_ndvi_s <- crop(r_stack,r_ref)
+r_NDVI_s <- crop(r_stack,r_ref)
+
+r_mask <- r_NDVI_s < -10000
+
+r_NDVI_m <- mask(r_NDVI_s,r_mask,inverse=T)
+plot(r_NDVI_m,y=1)
 
 ```
 
@@ -106,23 +114,77 @@ As a first step, we visually inspect for change using band combinations in a col
 #### Generate Color composites
 ### True color composite
 
-par(mfrow=c(2,1))
+#Correlate long term mean to PC!
+cor_mat_layerstats <- layerStats(r_NDVI_s, 'pearson', na.rm=T)
+#cov_mat_layerstats <- layerStats(r_NDVI_s, 'cov', na.rm=T)
 
-plotRGB(r_before,
-        r=1,
-        g=4,
-        b=3,
-        scale=0.6,
-        stretch="hist",
-        main="before")
+cor_matrix <- cor_mat_layerstats$`pearson correlation coefficient`
+#cov_matrix <- cov_mat_layerstats$`covariance`
 
-plotRGB(r_after,
-        r=1,
-        g=4,
-        b=3,
-        scale=0.6,
-        stretch="hist",
-        main="after")
+
+class(cor_matrix)
+dim(cor_matrix)
+#View(cor_matrix)
+image(cor_matrix)
+
+pca_mod <-principal(cor_matrix,nfactors=3,rotate="none")
+#pca_mod <-principal(cov_matrix,nfactors=3,rotate="none")
+
+#pca_mod <-principal(cov_matrix,nfactors=3,rotate="none")
+ 
+
+class(pca_mod$loadings)
+str(pca_mod$loadings)
+plot(pca_mod$loadings[,1],type="b",
+     xlab="time steps",
+     ylab="PC loadings",
+     ylim=c(-1,1),
+     col="blue")
+lines(pca_mod$loadings[,2],type="b",col="red")
+lines(pca_mod$loadings[,3],type="b",col="black")
+title("Loadings for the first three components using T-mode")
+
+##Make this a time series
+loadings_df <- as.data.frame(pca_mod$loadings[,1:3])
+#start_date <- "2018."
+#st <- as.Date(start_date,format="%Y.%m.%d")
+#en <- as.Date(end_date,format="%Y.%m.%d")
+
+month_range <- lf[[length(lf)]]
+month_range <- c(substr(month_range, 1, 2),substr(month_range, 3, 4))
+#month_range <- as.numeric(month_range)
+  
+#start_date <- paste(year_val,month_range[1],"01",sep=".")
+#end_date <- paste(year_val,month_range[2],"30",sep=".")
+  
+#st <- as.Date(start_date,format="%Y.%m.%d") #start date
+#en <- as.Date(end_date,format="%Y.%m.%d") #end date
+#ll <- seq.Date(st, en, by="15 day") #sequence of dates
+  
+month_vals <- month_range[1]:month_range[2]
+month_vals <- sprintf("%02d", month_vals)
+  
+dates_val <- 1:24
+pca_loadings_dz <- zoo(loadings_df,dates_val) #create zoo object from data.frame and date sequence object
+#?plot.zoo to find out about zoo time series plotting of indexes
+plot(pca_loadings_dz,
+     type="b",
+     plot.type="single",
+     col=c("blue","red","black"),
+     xlab="time steps",
+     ylab="PC loadings",
+     ylim=c(-1,1))
+title("Loadings for the first three components using T-mode")
+names_vals <- c("pc1","pc2","pc3")
+legend("topright",legend=names_vals,
+       pt.cex=0.8,cex=1.1,col=c("blue","red","black"),
+       lty=c(1,1), # set legend symbol as lines
+       pch=1, #add circle symbol to line
+       lwd=c(1,1),bty="n")
+
+## Add scree plot
+plot(pca_mod$values,main="Scree plot: Variance explained",type="b")
+
 
 ```
 
@@ -169,6 +231,7 @@ names_panel <- c("NDVI Before Event","NDVI After Event")
 levelplot(r_NDVI_s,
           names.attr = names_panel,
           col.regions=rev(terrain.colors(255)))
+
 
 
 ```
