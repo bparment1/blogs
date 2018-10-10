@@ -3,7 +3,7 @@
 # DO EDIT THE .Rmd AND knit THE .md LOCALLY
 title: "Raster Change Detection Analysis with Two Images"
 author: bparment1
-date: "10/08/2018"
+date: "10/10/2018"
 output:
   #html_document: 
   #  toc: true # will make headers as table of contents at the beginning
@@ -54,7 +54,7 @@ For this example, we take an image comparison approach using pair of images rath
 
 ### Setting up input parameters and directories
 
-Before carrying out any analyses, it is good practice to set up separate input and output directories to read in (input directory) and store outputs (output directory). I also place and define all the input parameters at the start of the script. An output directory is created on the fly based on the output suffix provided by the analyst.
+Before carrying out any analyses, it is good practice to set up separate input and output directories to read in (input directory) and store outputs (output directory). I also place and define all the input at the start of the script. An output directory is created on the fly based on the output suffix provided by the analyst.
 
 
 ```{r }
@@ -98,8 +98,8 @@ r_NDVI_s <- crop(r_stack,r_ref)
 
 r_mask <- r_NDVI_s < -10000
 
-r_NDVI_m <- mask(r_NDVI_s,r_mask,inverse=T)
-plot(r_NDVI_m,y=1)
+r_NDVI_s <- mask(r_NDVI_s,r_mask,maskvalue=1)
+plot(r_NDVI_s,y=1)
 
 ```
 
@@ -132,7 +132,6 @@ pca_mod <-principal(cor_matrix,nfactors=3,rotate="none")
 
 #pca_mod <-principal(cov_matrix,nfactors=3,rotate="none")
  
-
 class(pca_mod$loadings)
 str(pca_mod$loadings)
 plot(pca_mod$loadings[,1],type="b",
@@ -161,8 +160,8 @@ month_range <- c(substr(month_range, 1, 2),substr(month_range, 3, 4))
 #en <- as.Date(end_date,format="%Y.%m.%d") #end date
 #ll <- seq.Date(st, en, by="15 day") #sequence of dates
   
-month_vals <- month_range[1]:month_range[2]
-month_vals <- sprintf("%02d", month_vals)
+#month_vals <- month_range[1]:month_range[2]
+#month_vals <- sprintf("%02d", month_vals)
   
 dates_val <- 1:24
 pca_loadings_dz <- zoo(loadings_df,dates_val) #create zoo object from data.frame and date sequence object
@@ -193,21 +192,22 @@ False color composite images can also be useful to visualize change on the groun
 ```{r, echo=TRUE}
 
 ### False color composite:
-par(mfrow=c(2,1))
-plotRGB(r_before,
-        r=2,
-        g=1,
-        b=4,
-        scale=0.6,
-        stretch="hist")
+animate(r_NDVI_s,filename="test.gif")
 
-plotRGB(r_after,
-        r=2,
-        g=1,
-        b=4,
-        scale=0.6,
-        stretch="hist")
+## compare with cov matrix
+## do a plot of with 1,1 unit circle
+## Use information from the anthrome data
+## Pull out some curve from different categories
+## explain the PC1 (average)
 
+plot(fft(pca_mod$loadings[,2]))
+
+spectrum((pca_mod$loadings[,2]))
+
+#use cities to extract some profiles and average by anthromes classes
+
+#also generate maps!!!
+# and explain what is happening behind the PCA using matrix!!
 ```
 
 Visual inspection suggests some change areas especially visible in the false color composite towards the coast in the South East part of the study area. The next step is to quantitavely assess where changes occur. We use specific spectral bands combinations (indices) to focus on specific features from the ground. 
