@@ -1,0 +1,258 @@
+---
+# DO NOT EDIT THE .md ON GITHUB
+# DO EDIT THE .Rmd AND knit THE .md LOCALLY
+title: "Raster Change Detection Analysis with Two Images"
+author: bparment1
+date: "10/19/2018"
+output:
+  #html_document: 
+  #  toc: true # will make headers as table of contents at the beginning
+  #word_document: 
+  md_document:
+    preserve_yaml: true
+category: blog
+tags:
+ - R
+ - geospatial
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(
+  #root.dir = '/nfs/bparmentier-data/Data/',
+  base.dir = '../',
+  base.url = '{{ site.baseurl }}/')
+
+#https://yihui.name/knitr/options/#other-chunk-options
+#https://programminghistorian.org/en/lessons/building-static-sites-with-jekyll-github#-pages
+
+#root.dir: (NULL) the root directory when evaluating code chunks; if NULL, the #directory of the input document will be used
+knitr::opts_chunk$set(
+  echo = TRUE,
+  fig.path = 'assets/images/raster-change-analysis/'
+)
+
+library(sp) # spatial/geographic objects and functions
+library(rasterVis) # raster visualization operations
+library(raster) # raster functionalities
+library(rgeos) #contains topological operations
+library(sf) # spatial objects classes
+library(plotrix) # various graphic functions e.g. draw.circle
+library(colorRamps) # contains matlab.like color palette
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(psych) #pca/eigenvector decomposition functionalities
+library(xts)
+library(zoo)
+```
+
+## Principal Component Analysis with Time Series
+
+In this blog, I introduce the Principal Component Analysis (PCA) method for time series analysis. The goal is to perform a PCA on one year of satellite derived vegetation index  to examine spatial and temporal pattern of changes over a one year time period. I use 24 images from the GIMMS NOOA AVHHR sensor and focus on the continent of Africa for the year 1982.
+
+For this blog, I downloaded GIMMS data from XX and clipped/cropped data to the area of interest: the African continent. The goal of the blog is illustrate the use of PCA analysis for a time series dataset. For more detailed explanation of the tools (e.g. raster package R) or an general introduction to spatial data please follow links and see the [reference](#references) section.
+
+### Setting up input parameters and directories
+
+Before carrying out any analyses, I always start by defining separate input and output directories to read in (input directory) and store outputs (output directory). I also place and define all the input parameters and variables at the start of the script. In this example, an output directory is created on the fly based on the output suffix provided by the analyst.
+
+
+```{r }
+
+############################################################################
+#####  Parameters and argument set up ###########
+
+#Note: https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/20170008750.pdf
+out_suffix <- "pca_test_10192018" #output suffix for the files and ouptut folder
+
+in_dir <- "/nfs/bparmentier-data/Data/blogs/blog2_Time_series_Analysis_PCA/data"
+out_dir <- "/nfs/bparmentier-data/Data/blogs/blog2_Time_series_Analysis_PCA/data/outputs"
+
+file_format <- ".tif" #PARAM 4
+
+pattern_str <- "ndvi3g_geo.*.tif" #pattern for hte GIMMS dataset
+infile_reg_outline <- "africa_roi.tif" #region of interest
+
+```
+
+
+### Reading in rasters and visualizing bands
+
+We first load in the input image/raster time series. After generating a list of files, we create a stack of raster images (also called image collection) using the raster [brick](https://www.rdocumentation.org/packages/raster/versions/2.6-7/topics/brick). We crop the data using a reference image with the definition of the region of interest. We also screened values a using a mask to remove out of range values. If you are not familiar raster images and how to create, read in or display raster, you might want to check this link http://rspatial.org/spatial/rst/4-rasterdata.html) before continuing this blog.
+
+```{r }
+
+###### Read in GIMMS data ###########
+
+r_ref <- raster(file.path(in_dir,infile_reg_outline))
+lf <- list.files(pattern=pattern_str,
+                 path=in_dir,
+                 full.names = T)
+r_stack <- stack(lf)
+plot(r_stack,y=1)
+plot(r_ref)
+r_NDVI_s <- crop(r_stack,r_ref)
+
+r_mask <- r_NDVI_s < -10000
+
+r_NDVI_s <- mask(r_NDVI_s,r_mask,maskvalue=1)
+plot(r_NDVI_s,y=1)
+
+```
+We note the general pattern of vegetation for the African continent for January 1: low level of vegetation cover in the Sahara and Namib desert and the high values of in center of the continent.
+
+### Examing annual temporal pattern for major cities
+
+We assign dates to the raster stack using the time series object (from xts and zoo packages). To examine the changes in vegetation at specific location over the year, we extract values from cities across the continent. We use the xx dataset (available here:). For some cities, a clear seasonal patterns are visible.
+
+### Performing the PCA ####
+
+We carry out the PCA on the raster stack by generating a square matrix and extracting the eigenvectors and eigen values. We illustrate the process using the correlation matrix with the "principal" and the "eigen"" functions. The "principal" is provided by the psych package and allows the analyst to provide a square matrix rather than the input data.frame. By computing the square matrix before, we do not need to convert the raster stack into a data.frame object and can compute the covariance or correlation matrix as input to principal. This is particularly useful for large dataset.
+
+
+```{r , echo=TRUE}
+
+#### Generate Color composites
+### True color composite
+
+#Correlate long term mean to PC!
+cor_mat_layerstats <- layerStats(r_NDVI_s, 'pearson', na.rm=T)
+#cov_mat_layerstats <- layerStats(r_NDVI_s, 'cov', na.rm=T)
+
+cor_matrix <- cor_mat_layerstats$`pearson correlation coefficient`
+#cov_matrix <- cov_mat_layerstats$`covariance`
+
+
+class(cor_matrix)
+dim(cor_matrix)
+#View(cor_matrix)
+image(cor_matrix) #visualize the matrix
+
+pca_mod <-principal(cor_matrix,nfactors=3,rotate="none")
+#pca_mod <-principal(cov_matrix,nfactors=3,rotate="none")
+
+#pca_mod <-principal(cov_matrix,nfactors=3,rotate="none")
+ 
+class(pca_mod$loadings)
+str(pca_mod$loadings)
+plot(pca_mod$loadings[,1],type="b",
+     xlab="time steps",
+     ylab="PC loadings",
+     ylim=c(-1,1),
+     col="blue")
+lines(pca_mod$loadings[,2],type="b",col="red")
+lines(pca_mod$loadings[,3],type="b",col="black")
+title("Loadings for the first three components using T-mode")
+
+##Make this a time series
+loadings_df <- as.data.frame(pca_mod$loadings[,1:3])
+#start_date <- "2018."
+#st <- as.Date(start_date,format="%Y.%m.%d")
+#en <- as.Date(end_date,format="%Y.%m.%d")
+
+month_range <- lf[[length(lf)]]
+month_range <- c(substr(month_range, 1, 2),substr(month_range, 3, 4))
+#month_range <- as.numeric(month_range)
+  
+#start_date <- paste(year_val,month_range[1],"01",sep=".")
+#end_date <- paste(year_val,month_range[2],"30",sep=".")
+  
+#st <- as.Date(start_date,format="%Y.%m.%d") #start date
+#en <- as.Date(end_date,format="%Y.%m.%d") #end date
+#ll <- seq.Date(st, en, by="15 day") #sequence of dates
+  
+#month_vals <- month_range[1]:month_range[2]
+#month_vals <- sprintf("%02d", month_vals)
+  
+dates_val <- 1:24
+pca_loadings_dz <- zoo(loadings_df,dates_val) #create zoo object from data.frame and date sequence object
+#?plot.zoo to find out about zoo time series plotting of indexes
+plot(pca_loadings_dz,
+     type="b",
+     plot.type="single",
+     col=c("blue","red","black"),
+     xlab="time steps",
+     ylab="PC loadings",
+     ylim=c(-1,1))
+title("Loadings for the first three components using T-mode")
+names_vals <- c("pc1","pc2","pc3")
+legend("topright",legend=names_vals,
+       pt.cex=0.8,cex=1.1,col=c("blue","red","black"),
+       lty=c(1,1), # set legend symbol as lines
+       pch=1, #add circle symbol to line
+       lwd=c(1,1),bty="n")
+
+## Add scree plot
+plot(pca_mod$values,main="Scree plot: Variance explained")
+
+```
+
+False color composite images can also be useful to visualize change on the ground. Such composite is similar to a Color Infrared (CIR) photography. We generate a RGB false composite by identifying spectral bands corresponding to red (band 2: SWIR), green (band 4) and blue (band 1). False Color composites may be particularly are useful to detect vegetation and water presence on the ground. 
+
+```{r, echo=TRUE}
+
+### False color composite:
+animate(r_NDVI_s,filename="test.gif")
+
+## compare with cov matrix
+## do a plot of with 1,1 unit circle
+## Use information from the anthrome data
+## Pull out some curve from different categories
+## explain the PC1 (average)
+
+plot(fft(pca_mod$loadings[,2]))
+
+spectrum((pca_mod$loadings[,2]))
+
+#use cities to extract some profiles and average by anthromes classes
+
+#also generate maps!!!
+# and explain what is happening behind the PCA using matrix!!
+```
+
+Visual inspection suggests some change areas especially visible in the false color composite towards the coast in the South East part of the study area. The next step is to quantitavely assess where changes occur. We use specific spectral bands combinations (indices) to focus on specific features from the ground. 
+
+### Generating Indices from the original bands: NDVI
+
+We use the original bands from MOD09 product to generate NDVI indices to detect changes in vegetation response. Indices are derived for both before and after the hurricane. NDVI is generated using the Red and Near Infrared (NIR) bands:
+
+NDVI = (NIR - Red)/(NIR+Red)
+
+NDVI is widely used to detect vegetation on the ground and sometimes to examine the impact of hurricanes on local forest and flooding. We generated indices for both dates and plot maps on the same scale using the levelplot function from RasterVis.
+
+```{r,echo=TRUE}
+
+names(r_before)
+r_before_NDVI <- (r_before$NIR - r_before$Red) / (r_before$NIR + r_before$Red)
+r_after_NDVI <- (r_after$NIR - r_after$Red)/(r_after$NIR + r_after$Red)
+
+r_NDVI_s <- stack(r_before_NDVI,r_after_NDVI)
+names_panel <- c("NDVI Before Event","NDVI After Event")
+levelplot(r_NDVI_s,
+          names.attr = names_panel,
+          col.regions=rev(terrain.colors(255)))
+
+
+
+```
+
+Comparison of before and after NDVI images suggests a general drop in NDVI for the region with some additional pockets of water near the coast. This visual comparison is interesting but let  us check results against data from the Federal Emergency Management Agency (FEMA) that mapped the area flooded by Rita. We use a vector file with zone=1 representing flooding and zone=0 no flooding. This is rasterized to produce a boxplot of the averages by zones.
+
+
+### Conclusions
+
+This blog introduced a simple change detection analysis using MOD09 product aggregated at 1km resolution. We used two MODIS sensor images captured before and after hurrican Rita on the coast of Louisiana. Visual inspection showed evidence of changes (both in indivdiual bands and color composites). We also found quantitative changes in NDVI, most notably a decrease in average NDVI in flooded areas. We used two common thresholding techniques used by researchers to classify the impact from a difference image (after-before) and found some matching with the FEMA flood map but with some underestimation. The analysis is simple and straightforward but could be refined by using different thresholding or other procedures. For instance, , more advanced approach can account for the vegetation and flood seasonality in the data. This type of analysis would lead to a more advanced topic: time series analysis of raster images. This may be a topic for a new blog!
+
+### References
+
+- For a general introduction to spatial data: http://rspatial.org/spatial/rst/1-introduction.html
+- For information on manipulating, plotting or operating on spatial data:
+https://datacarpentry.org/geospatial-workshop/ 
+- For Geosptial teaching material from the National Socio-Environmental Center: http://cyberhelp.sesync.org/syllabi/2018/04/02/geospatial-workshop.html
+- For an example of a research study on hurricane impact: Hurricane disturbance mapping using MODIS EVI data in the southeastern Yucatán, Mexico
+John Rogan , Laura Schneider , Zachary Christman , Marco Millones , Deborah Lawrence  & Birgit Schmook
+Pages 259-267 | Received 12 Jun 2010, Accepted 28 Aug 2010, Published online: 29 Oct 2010
+Download citation  https://doi.org/10.1080/01431161.2010.520344
+
+
+
