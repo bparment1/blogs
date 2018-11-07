@@ -1,35 +1,35 @@
 ---
-## DO NOT EDIT THE .md ON GITHUB
-## DO EDIT THE .Rmd AND knit THE .md LOCALLY
-#title: "Raster Change Detection Analysis with Two Images"
-#author: bparment1
-#date: "10/19/2018"
-#output:
-#  #html_document: 
-#  #  toc: true # will make headers as table of contents at the beginning
-#  #word_document: 
-#  md_document:
-#    preserve_yaml: true
-#category: blog
-#tags:
-# - R
-# - geospatial
+# DO NOT EDIT THE .md ON GITHUB
+# DO EDIT THE .Rmd AND knit THE .md LOCALLY
+title: "Raster Change Detection Analysis with Two Images"
+author: bparment1
+date: "10/19/2018"
+output:
+  #html_document: 
+  #  toc: true # will make headers as table of contents at the beginning
+  #word_document: 
+  md_document:
+    preserve_yaml: true
+category: blog
+tags:
+ - R
+ - geospatial
 ---
 
 ```{r setup, include=FALSE}
-#knitr::opts_knit$set(
-#  #root.dir = '/nfs/bparmentier-data/Data/',
-#  base.dir = '../',
-#  base.url = '{{ site.baseurl }}/')
+knitr::opts_knit$set(
+  #root.dir = '/nfs/bparmentier-data/Data/',
+  base.dir = '../',
+  base.url = '{{ site.baseurl }}/')
 
-##https://yihui.name/knitr/options/#other-chunk-options
-##https://programminghistorian.org/en/lessons/building-static-sites-with-jekyll-github#-pages
+#https://yihui.name/knitr/options/#other-chunk-options
+#https://programminghistorian.org/en/lessons/building-static-sites-with-jekyll-github#-pages
 
-##root.dir: (NULL) the root directory when evaluating code chunks; if NULL, the #directory of the input document will be used
-#knitr::opts_chunk$set(
-#  echo = TRUE,
-#  fig.path = 'assets/images/raster-change-analysis/'
-#)
+#root.dir: (NULL) the root directory when evaluating code chunks; if NULL, the #directory of the input document will be used
+knitr::opts_chunk$set(
+  echo = TRUE,
+  fig.path = 'assets/images/raster-change-analysis/'
+)
 
 library(sp) # spatial/geographic objects and functions
 library(rasterVis) # raster visualization operations
@@ -44,7 +44,6 @@ library(ggplot2)
 library(psych) #pca/eigenvector decomposition functionalities
 library(xts)
 library(zoo)
-library(stringr)
 ```
 
 ## Principal Component Analysis with Time Series
@@ -71,7 +70,7 @@ out_dir <- "/nfs/bparmentier-data/Data/blogs/blog2_Time_series_Analysis_PCA/data
 
 file_format <- ".tif" #PARAM 4
 
-pattern_str <- "ndvi3g_geo.*.201.*.tif" #pattern for hte GIMMS dataset
+pattern_str <- "ndvi3g_geo.*.tif" #pattern for hte GIMMS dataset
 infile_reg_outline <- "africa_roi.tif" #region of interest
 
 ```
@@ -129,30 +128,43 @@ dim(cor_matrix)
 #View(cor_matrix)
 image(cor_matrix) #visualize the matrix
 
-n_pc <- 4
-pca_mod <-principal(cor_matrix,nfactors=n_pc,rotate="none")
+pca_mod <-principal(cor_matrix,nfactors=3,rotate="none")
+#pca_mod <-principal(cov_matrix,nfactors=3,rotate="none")
 
-loadings_df <- as.data.frame(pca_mod$loadings[,1:n_pc])
-list_file_names <- (str_split(names(r_NDVI_s),"_"))
-list_file_names[[1]]
+#pca_mod <-principal(cov_matrix,nfactors=3,rotate="none")
+ 
+class(pca_mod$loadings)
+str(pca_mod$loadings)
+plot(pca_mod$loadings[,1],type="b",
+     xlab="time steps",
+     ylab="PC loadings",
+     ylim=c(-1,1),
+     col="blue")
+lines(pca_mod$loadings[,2],type="b",col="red")
+lines(pca_mod$loadings[,3],type="b",col="black")
+title("Loadings for the first three components using T-mode")
 
-extract_dates <- function(filename_val){
-  n_string <- length(filename_val)
-  n_start <- n_string - 3 + 1
+##Make this a time series
+loadings_df <- as.data.frame(pca_mod$loadings[,1:3])
+#start_date <- "2018."
+#st <- as.Date(start_date,format="%Y.%m.%d")
+#en <- as.Date(end_date,format="%Y.%m.%d")
+
+month_range <- lf[[length(lf)]]
+month_range <- c(substr(month_range, 1, 2),substr(month_range, 3, 4))
+#month_range <- as.numeric(month_range)
   
-  date_tmp <- filename_val[n_start:n_string]
-  date_tmp <- paste(date_tmp,collapse=".")
-  date_queried <- date_tmp
-  #date_queried <- as.Date(date_tmp ,
-  #                        format = "%Y.%m.%d")
-  return(date_queried)
-}
-
-dates_val <- unlist(lapply(list_file_names,FUN=extract_dates))
-
-dates_val <- as.Date(dates_val ,format = "%Y.%m.%d")
-
-#dates_val <- 1:24
+#start_date <- paste(year_val,month_range[1],"01",sep=".")
+#end_date <- paste(year_val,month_range[2],"30",sep=".")
+  
+#st <- as.Date(start_date,format="%Y.%m.%d") #start date
+#en <- as.Date(end_date,format="%Y.%m.%d") #end date
+#ll <- seq.Date(st, en, by="15 day") #sequence of dates
+  
+#month_vals <- month_range[1]:month_range[2]
+#month_vals <- sprintf("%02d", month_vals)
+  
+dates_val <- 1:24
 pca_loadings_dz <- zoo(loadings_df,dates_val) #create zoo object from data.frame and date sequence object
 #?plot.zoo to find out about zoo time series plotting of indexes
 plot(pca_loadings_dz,
@@ -163,65 +175,73 @@ plot(pca_loadings_dz,
      ylab="PC loadings",
      ylim=c(-1,1))
 title("Loadings for the first three components using T-mode")
-names_vals <- c("pc1","pc2","pc3","pc4")
-legend("bottomright",legend=names_vals,
+names_vals <- c("pc1","pc2","pc3")
+legend("topright",legend=names_vals,
        pt.cex=0.8,cex=1.1,col=c("blue","red","black"),
        lty=c(1,1), # set legend symbol as lines
        pch=1, #add circle symbol to line
        lwd=c(1,1),bty="n")
+
 ## Add scree plot
-#plot(pca_mod$values,main="Scree plot: Variance explained")
+plot(pca_mod$values,main="Scree plot: Variance explained")
 
 ```
 
-Let's examine the temporal patterns in the loadings. The harmonic patterns suggest seasonality. We use ACF to examine the presence of spcific period in the components and CCF to examine the relationship (shift) between PC2 and PC3. We find that CP2 and PC3 contain periodic signal of 12 months while PC4 contains peridodic signal of 6 months.
+False color composite images can also be useful to visualize change on the ground. Such composite is similar to a Color Infrared (CIR) photography. We generate a RGB false composite by identifying spectral bands corresponding to red (band 2: SWIR), green (band 4) and blue (band 1). False Color composites may be particularly are useful to detect vegetation and water presence on the ground. 
 
 ```{r, echo=TRUE}
 
-### Analyze loading patterns
-#animate(r_NDVI_s,filename="test.gif")
+### False color composite:
+animate(r_NDVI_s,filename="test.gif")
 
-acf(as.vector(pca_loadings_dz$PC2))
-acf(as.vector(pca_loadings_dz$PC3))
-
-ccf(as.vector(pca_loadings_dz$PC2),as.vector(pca_loadings_dz$PC3))
-#acf and ccf
-
-acf(as.vector(pca_loadings_dz$PC4))
-
-#comparea profiles at different location north and south
-
-#use cities to extract some profiles and average by anthromes classes
-
-#also generate maps!!!
-# and explain what is happening behind the PCA using matrix!!
-
-## Do overall average, January average and June average to compare patterns to PC1, PC2, PC3
-
-### Reclassify image for PC2 into 0,0.5 and 0..5 2 do profiles
-
-```
-
-```{r}
 ## compare with cov matrix
 ## do a plot of with 1,1 unit circle
 ## Use information from the anthrome data
 ## Pull out some curve from different categories
 ## explain the PC1 (average)
-#pca_loadings_dz$PC2
+
+plot(fft(pca_mod$loadings[,2]))
+
+spectrum((pca_mod$loadings[,2]))
+
+#use cities to extract some profiles and average by anthromes classes
+
+#also generate maps!!!
+# and explain what is happening behind the PCA using matrix!!
+```
+
+Visual inspection suggests some change areas especially visible in the false color composite towards the coast in the South East part of the study area. The next step is to quantitavely assess where changes occur. We use specific spectral bands combinations (indices) to focus on specific features from the ground. 
+
+### Generating Indices from the original bands: NDVI
+
+We use the original bands from MOD09 product to generate NDVI indices to detect changes in vegetation response. Indices are derived for both before and after the hurricane. NDVI is generated using the Red and Near Infrared (NIR) bands:
+
+NDVI = (NIR - Red)/(NIR+Red)
+
+NDVI is widely used to detect vegetation on the ground and sometimes to examine the impact of hurricanes on local forest and flooding. We generated indices for both dates and plot maps on the same scale using the levelplot function from RasterVis.
+
+```{r,echo=TRUE}
+
+names(r_before)
+r_before_NDVI <- (r_before$NIR - r_before$Red) / (r_before$NIR + r_before$Red)
+r_after_NDVI <- (r_after$NIR - r_after$Red)/(r_after$NIR + r_after$Red)
+
+r_NDVI_s <- stack(r_before_NDVI,r_after_NDVI)
+names_panel <- c("NDVI Before Event","NDVI After Event")
+levelplot(r_NDVI_s,
+          names.attr = names_panel,
+          col.regions=rev(terrain.colors(255)))
+
+
 
 ```
 
+Comparison of before and after NDVI images suggests a general drop in NDVI for the region with some additional pockets of water near the coast. This visual comparison is interesting but let  us check results against data from the Federal Emergency Management Agency (FEMA) that mapped the area flooded by Rita. We use a vector file with zone=1 representing flooding and zone=0 no flooding. This is rasterized to produce a boxplot of the averages by zones.
+
+
 ### Conclusions
 
-This blog introduced Principal Component Analysis for Time Series Analysis. I showed that temporal patterns are extracted from the spatio-temporal datasets:
-
-1. PC1 is the mean long term average from the time series.
-2. PC2 displays the North and South movement around the equator as the ITCZ moves back and forth. Peaks of vegetation are in January for the Southern Hemisphere and in July for the Northern Hemisphere.
-3. PC3 captures the same movement but with a shift in timing (about 3 months)
-4. PC4 captures the same movement with peaks in spring and Fall.
-
-Thus, PCA extracts variabilty related to the seasonality. To focus on other types of variablity the dataset can be modified to remove the seasonality. This is the approach in climate anomalies studies.
+This blog introduced a simple change detection analysis using MOD09 product aggregated at 1km resolution. We used two MODIS sensor images captured before and after hurrican Rita on the coast of Louisiana. Visual inspection showed evidence of changes (both in indivdiual bands and color composites). We also found quantitative changes in NDVI, most notably a decrease in average NDVI in flooded areas. We used two common thresholding techniques used by researchers to classify the impact from a difference image (after-before) and found some matching with the FEMA flood map but with some underestimation. The analysis is simple and straightforward but could be refined by using different thresholding or other procedures. For instance, , more advanced approach can account for the vegetation and flood seasonality in the data. This type of analysis would lead to a more advanced topic: time series analysis of raster images. This may be a topic for a new blog!
 
 ### References
 
@@ -229,9 +249,10 @@ Thus, PCA extracts variabilty related to the seasonality. To focus on other type
 - For information on manipulating, plotting or operating on spatial data:
 https://datacarpentry.org/geospatial-workshop/ 
 - For Geosptial teaching material from the National Socio-Environmental Center: http://cyberhelp.sesync.org/syllabi/2018/04/02/geospatial-workshop.html
-- For an example of a research study on PCA: LONG SEQUENCE TIME SERIES EVALUATION USING STANDARDIZED PRINCIPAL COMPONENTS.Eastman, J R
-Fulk, M
-Download citation  https://www.asprs.org/wp-content/uploads/pers/1993journal/aug/1993_aug_1307-1312.pdf
+- For an example of a research study on hurricane impact: Hurricane disturbance mapping using MODIS EVI data in the southeastern Yucatán, Mexico
+John Rogan , Laura Schneider , Zachary Christman , Marco Millones , Deborah Lawrence  & Birgit Schmook
+Pages 259-267 | Received 12 Jun 2010, Accepted 28 Aug 2010, Published online: 29 Oct 2010
+Download citation  https://doi.org/10.1080/01431161.2010.520344
 
 
 
