@@ -1,9 +1,22 @@
-list_file_names <- str_split(names(r_NDVI_s),"_")
-n_string <- length(list_file_names[[1]])
-n_start <- n_string - 3 + 1
+list_file_names <- (str_split(names(r_NDVI_s),"_"))
+list_file_names
+
+extract_dates <- function(filename_val){
+  n_string <- length(filename_val)
+  n_start <- n_string - 3 + 1
+  
+  date_tmp <- filename_val[n_start:n_string]
+  dates_queried <- paste(date_tmp,collapse=".")
+  date_queried <- as.Date(date_tmp ,
+                           format = "%Y.%m.%d")
+  return(dates_queried)
+}
+
+dates_val <- unlist(lapply(list_file_names,FUN=extract_dates))
 
 date_tmp <- list_file_names[[1]][n_start:n_string]
-date_tmp <- paste(date_tmp,collapse=".")
+dates_queried <- paste(date_tmp,collapse=".")
+
 month_vals <- month_range[1]:month_range[2]
 month_vals <- sprintf("%02d", month_vals)
 
@@ -14,8 +27,7 @@ format(today, format="%B %d %Y")
 
 #list_dates <-unlist(lapply(month_vals,function(x){paste0(x,".",c("01","15"))}))
 list_dates <-unlist(lapply(month_vals,function(x){paste0(x,"_",c("01","15"))}))
-betterDates <- as.Date(date_tmp ,
-                       format = "%Y.%m.%d")
+
 dates_queried <- format(date_tmp,"%Y.%m.%d") #formatting queried dates
 #dates_val <- format(ll[-13],"%Y_%m_%d") #formatting queried dates
 dates_val <- paste(year_val,list_dates,sep="_") #output dates
