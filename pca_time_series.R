@@ -14,36 +14,27 @@ extract_dates <- function(filename_val){
 
 dates_val <- unlist(lapply(list_file_names,FUN=extract_dates))
 
-date_tmp <- list_file_names[[1]][n_start:n_string]
-dates_queried <- paste(date_tmp,collapse=".")
-
-month_vals <- month_range[1]:month_range[2]
-month_vals <- sprintf("%02d", month_vals)
-
-# print today's date
-today <- Sys.Date()
-format(today, format="%B %d %Y")
-"June 20 2007"
-
-#list_dates <-unlist(lapply(month_vals,function(x){paste0(x,".",c("01","15"))}))
-list_dates <-unlist(lapply(month_vals,function(x){paste0(x,"_",c("01","15"))}))
-
-dates_queried <- format(date_tmp,"%Y.%m.%d") #formatting queried dates
-#dates_val <- format(ll[-13],"%Y_%m_%d") #formatting queried dates
-dates_val <- paste(year_val,list_dates,sep="_") #output dates
-names()
-
-plot(pca_mod$loadings[,1],type="b",
+pca_loadings_dz <- zoo(loadings_df,dates_val) #create zoo object from data.frame and date sequence object
+#?plot.zoo to find out about zoo time series plotting of indexes
+plot(pca_loadings_dz,
+     type="b",
+     plot.type="single",
+     col=c("blue","red","black"),
      xlab="time steps",
      ylab="PC loadings",
-     ylim=c(-1,1),
-     col="blue")
-lines(pca_mod$loadings[,2],type="b",col="red")
-lines(pca_mod$loadings[,3],type="b",col="black")
+     ylim=c(-1,1))
 title("Loadings for the first three components using T-mode")
+names_vals <- c("pc1","pc2","pc3")
+legend("topright",legend=names_vals,
+       pt.cex=0.8,cex=1.1,col=c("blue","red","black"),
+       lty=c(1,1), # set legend symbol as lines
+       pch=1, #add circle symbol to line
+       lwd=c(1,1),bty="n")
 
-r_test <- r_NDVI_s < -10000
+## Add scree plot
+plot(pca_mod$values,main="Scree plot: Variance explained")
 
+###################
 
 plot(Re(fft(pca_mod$loadings[,2])))
 
