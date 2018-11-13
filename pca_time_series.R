@@ -60,26 +60,14 @@ load_obj <- function(f){
 out_suffix <- "pca_intro_time_series_11132018" #output suffix for the files and ouptut folder
 
 in_dir <- "/nfs/bparmentier-data/Data/blogs/blog2_Time_series_Analysis_PCA/data"
-out_dir <- "/nfs/bparmentier-data/Data/blogs/blog2_Time_series_Analysis_PCA/data/outputs"
+out_dir <- "/nfs/bparmentier-data/Data/blogs/blog2_Time_series_Analysis_PCA/outputs"
 
 file_format <- ".tif" #PARAM 4
 
 pattern_str <- "ndvi3g_geo.*.201.*.tif" #pattern for hte GIMMS dataset
 infile_reg_outline <- "africa_roi.tif" #region of interest
 
-r_ref <- raster(file.path(in_dir,infile_reg_outline))
-lf <- list.files(pattern=pattern_str,
-                 path=in_dir,
-                 full.names = T)
-r_stack <- stack(lf)
-plot(r_stack,y=1)
-plot(r_ref)
-r_NDVI_s <- crop(r_stack,r_ref)
-
-r_mask <- r_NDVI_s < -10000
-
-r_NDVI_s <- mask(r_NDVI_s,r_mask,maskvalue=1)
-plot(r_NDVI_s,y=1)
+create_out_dir_param=TRUE #create a new ouput dir if TRUE
 
 ################# START SCRIPT ###############################
 
@@ -100,8 +88,25 @@ if(create_out_dir_param==TRUE){
   setwd(out_dir) #use previoulsy defined directory
 }
 
-#### Generate Color composites
-### True color composite
+
+###### Read in GIMMS data ###########
+
+r_ref <- raster(file.path(in_dir,infile_reg_outline))
+lf <- list.files(pattern=pattern_str,
+                 path=in_dir,
+                 full.names = T)
+r_stack <- stack(lf)
+plot(r_stack,y=1)
+plot(r_ref)
+r_NDVI_s <- crop(r_stack,r_ref)
+
+r_mask <- r_NDVI_s < -10000
+
+r_NDVI_s <- mask(r_NDVI_s,r_mask,maskvalue=1)
+plot(r_NDVI_s,y=1)
+
+#####################################
+############## Part 2: generate PCA ##############
 
 #Correlate long term mean to PC!
 cor_mat_layerstats <- layerStats(r_NDVI_s, 'pearson', na.rm=T)
@@ -116,26 +121,12 @@ dim(cor_matrix)
 #View(cor_matrix)
 image(cor_matrix) #visualize the matrix
 
-pca_mod <-principal(cor_matrix,nfactors=3,rotate="none")
-#pca_mod <-principal(cov_matrix,nfactors=3,rotate="none")
+n_pc <- 4
+pca_mod <-principal(cor_matrix,nfactors=n_pc,rotate="none")
 
-#pca_mod <-principal(cov_matrix,nfactors=3,rotate="none")
-
-#class(pca_mod$loadings)
-#str(pca_mod$loadings)
-#plot(pca_mod$loadings[,1],type="b",
-#     xlab="time steps",
-#     ylab="PC loadings",
-#     ylim=c(-1,1),
-#     col="blue")
-#lines(pca_mod$loadings[,2],type="b",col="red")
-#lines(pca_mod$loadings[,3],type="b",col="black")
-#title("Loadings for the first three components using T-mode")
-
-##Make this a time series
-loadings_df <- as.data.frame(pca_mod$loadings[,1:3])
+loadings_df <- as.data.frame(pca_mod$loadings[,1:n_pc])
 list_file_names <- (str_split(names(r_NDVI_s),"_"))
-list_file_names
+list_file_names[[1]]
 
 extract_dates <- function(filename_val){
   n_string <- length(filename_val)
@@ -148,10 +139,6 @@ extract_dates <- function(filename_val){
   #                        format = "%Y.%m.%d")
   return(date_queried)
 }
-
-undebug(extract_dates)
-
-dates_val <- extract_dates(list_file_names[[1]])
 
 dates_val <- unlist(lapply(list_file_names,FUN=extract_dates))
 
@@ -168,30 +155,21 @@ plot(pca_loadings_dz,
      ylab="PC loadings",
      ylim=c(-1,1))
 title("Loadings for the first three components using T-mode")
-names_vals <- c("pc1","pc2","pc3")
+names_vals <- c("pc1","pc2","pc3","pc4")
 legend("bottomright",legend=names_vals,
        pt.cex=0.8,cex=1.1,col=c("blue","red","black"),
        lty=c(1,1), # set legend symbol as lines
        pch=1, #add circle symbol to line
        lwd=c(1,1),bty="n")
-
 ## Add scree plot
 #plot(pca_mod$values,main="Scree plot: Variance explained")
 
-###################
 
-plot(Re(fft(pca_mod$loadings[,2])))
+#####################################
+############## Part 3: generate PCA scores images ##############
 
-#do a AR
-acf(pca_mod$loadings[,2])
-acf(pca_mod$loadings[,3])
-ccf(pca_mod$loadings[,2],pca_mod$loadings[,3])
-ccf(pca_mod$loadings[,2],pca_mod$loadings[,2])
-
-pacf(pca_mod$loadings[,2])
-# calculate fft of data
-
-
+### Using predict function: this is recommended for raster imagery!!
+# note the use of the 'index' argument
 r_pca <- predict(r_NDVI_s, pca_mod, index=1:n_pc,filename="pc_scores.tif",overwrite=T) # fast
 plot(r_pca)
 
@@ -203,8 +181,21 @@ cor_pc <- layerStats(stack(r_pca$pc1,r_NDVI_mean),'pearson', na.rm=T)
 cor_pc #PC1 correspond to the average mean by pixel as expected.
 plot(r_pc2)
 
+#####################################
+############## Part 4 : Analyze temporal patterns from loadings ##############
 
+#do a AR
+acf(pca_mod$loadings[,2])
+acf(pca_mod$loadings[,3])
+ccf(pca_mod$loadings[,2],pca_mod$loadings[,3])
+ccf(pca_mod$loadings[,2],pca_mod$loadings[,2])
 
+pacf(pca_mod$loadings[,2])
+# calculate fft of data
+
+###################
+
+plot(Re(fft(pca_mod$loadings[,2])))
 
 
 test <- fft(pca_mod$loadings[,3])
@@ -232,7 +223,8 @@ plot(magn.1,type="l")
 x.axis <- 1:length(magn.1)/time
 
 # plot magnitudes against frequencies
-x11()
 plot(x=x.axis,y=magn.1,type="l")
 
 spectrum((pca_mod$loadings[,2]))
+
+########################## End of script ######################################
