@@ -53,6 +53,18 @@ load_obj <- function(f){
   env[[nm]]
 }
 
+extract_dates <- function(filename_val){
+  #Custom function to extract dates from filenames
+  
+  n_string <- length(filename_val)
+  n_start <- n_string - 3 + 1
+  
+  date_tmp <- filename_val[n_start:n_string]
+  date_tmp <- paste(date_tmp,collapse=".")
+  date_queried <- date_tmp
+  return(date_queried)
+}
+
 ############################################################################
 #####  Parameters and argument set up ###########
 
@@ -128,41 +140,29 @@ loadings_df <- as.data.frame(pca_mod$loadings[,1:n_pc])
 list_file_names <- (str_split(names(r_NDVI_s),"_"))
 list_file_names[[1]]
 
-extract_dates <- function(filename_val){
-  n_string <- length(filename_val)
-  n_start <- n_string - 3 + 1
-  
-  date_tmp <- filename_val[n_start:n_string]
-  date_tmp <- paste(date_tmp,collapse=".")
-  date_queried <- date_tmp
-  #date_queried <- as.Date(date_tmp ,
-  #                        format = "%Y.%m.%d")
-  return(date_queried)
-}
-
 dates_val <- unlist(lapply(list_file_names,FUN=extract_dates))
 
 dates_val <- as.Date(dates_val ,format = "%Y.%m.%d")
 
-#dates_val <- 1:24
 pca_loadings_dz <- zoo(loadings_df,dates_val) #create zoo object from data.frame and date sequence object
-#?plot.zoo to find out about zoo time series plotting of indexes
 plot(pca_loadings_dz,
      type="b",
      plot.type="single",
-     col=c("blue","red","black"),
+     col=c("blue","red","black","green"),
      xlab="time steps",
      ylab="PC loadings",
      ylim=c(-1,1))
 title("Loadings for the first three components using T-mode")
 names_vals <- c("pc1","pc2","pc3","pc4")
 legend("bottomright",legend=names_vals,
-       pt.cex=0.8,cex=1.1,col=c("blue","red","black"),
+       pt.cex=0.8,cex=1.1,col=c("blue","red","black","green"),
        lty=c(1,1), # set legend symbol as lines
        pch=1, #add circle symbol to line
        lwd=c(1,1),bty="n")
 ## Add scree plot
-#plot(pca_mod$values,main="Scree plot: Variance explained")
+
+percent_explained <- pca_mod$values/sum(pca_mod$values) 
+barplot(,main="Scree plot: Variance explained")
 
 
 #####################################
