@@ -49,9 +49,9 @@ library(stringr)
 
 ## Principal Component Analysis with Time Series
 
-In this blog, I introduce the Principal Component Analysis (PCA) method for time series analysis. The goal is to perform a PCA on one year of satellite derived vegetation index  to examine spatial and temporal pattern of changes over a one year time period. I use 24 images from the GIMMS NOOA AVHHR sensor and focus on the continent of Africa for the year 1982.
+In this blog, I introduce the Principal Component Analysis (PCA) method for time series analysis. The goal is to perform a PCA on one year of satellite derived vegetation index  to examine spatial and temporal pattern of changes over a one year time period. I use 24 images from the GIMMS NOOA AVHHR sensor and focus on the continent of Africa for the years 2010 and 2011.
 
-For this blog, I downloaded GIMMS data from XX and clipped/cropped data to the area of interest: the African continent. The goal of the blog is illustrate the use of PCA analysis for a time series dataset. For more detailed explanation of the tools (e.g. raster package R) or an general introduction to spatial data please follow links and see the [reference](#references) section.
+For this blog, I downloaded GIMMS data from the NASA Ecocast website (https://ecocast.arc.nasa.gov/data/pub/gimms/) and clipped/cropped data to the area of interest: the African continent. The goal of the blog is illustrate the use of PCA analysis for a time series dataset. For more detailed explanation of the tools (e.g. raster package R) or an general introduction to spatial data please follow links and see the [reference](#references) section.
 
 ### Setting up input parameters and directories
 
@@ -67,12 +67,14 @@ Before carrying out any analyses, I always start by defining separate input and 
 out_suffix <- "pca_test_10192018" #output suffix for the files and ouptut folder
 
 in_dir <- "/nfs/bparmentier-data/Data/blogs/blog2_Time_series_Analysis_PCA/data"
-out_dir <- "/nfs/bparmentier-data/Data/blogs/blog2_Time_series_Analysis_PCA/data/outputs"
+out_dir <- "/nfs/bparmentier-data/Data/blogs/blog2_Time_series_Analysis_PCA/outputs"
 
 file_format <- ".tif" #PARAM 4
 
 pattern_str <- "ndvi3g_geo.*.201.*.tif" #pattern for hte GIMMS dataset
 infile_reg_outline <- "africa_roi.tif" #region of interest
+
+
 
 ```
 
@@ -112,9 +114,6 @@ We carry out the PCA on the raster stack by generating a square matrix and extra
 
 
 ```{r , echo=TRUE}
-
-#### Generate Color composites
-### True color composite
 
 #Correlate long term mean to PC!
 cor_mat_layerstats <- layerStats(r_NDVI_s, 'pearson', na.rm=T)
@@ -171,6 +170,24 @@ legend("bottomright",legend=names_vals,
        lwd=c(1,1),bty="n")
 ## Add scree plot
 #plot(pca_mod$values,main="Scree plot: Variance explained")
+
+```
+
+Let's now generate the scores images for each component. Note that throughout this example, I use layerStats to generate the correlation matrix and predict with the prinicpal object to generate the PCA image core. This is the  recommended approach to generate PC components without the need for conversion to data.frame. As comparison, we generate a long term mean and relate it to PC1. We also show the average value for January and July and how they relate to PC2.
+
+```{r}
+### Using predict function: this is recommended for raster imagery!!
+# note the use of the 'index' argument
+r_pca <- predict(r_NDVI_s, pca_mod, index=1:n_pc,filename="pc_scores.tif",overwrite=T) # fast
+plot(r_pca)
+
+r_NDVI_mean <- mean(r_NDVI_s, na.rm=TRUE) # mean by pixel
+
+#plot(stack(r_pc1,r_pc2))
+#layerStats(r_pc1,r_NDVI_mean )
+cor_pc <- layerStats(stack(r_pca$pc1,r_NDVI_mean),'pearson', na.rm=T)
+cor_pc #PC1 correspond to the average mean by pixel as expected.
+plot(r_pc2)
 
 ```
 
