@@ -5,7 +5,7 @@
 #
 #AUTHORS: Benoit Parmentier                                             
 #DATE CREATED: 10/10/2018 
-#DATE MODIFIED: 11/13/2018
+#DATE MODIFIED: 11/19/2018
 #Version: 1
 #PROJECT: Data Science blog series
 #TO DO:
@@ -162,8 +162,10 @@ legend("bottomright",legend=names_vals,
 ## Add scree plot
 
 percent_explained <- pca_mod$values/sum(pca_mod$values) 
-barplot(,main="Scree plot: Variance explained")
-
+barplot(percent_explained[1:10],
+        main="Scree plot: Variance explained",
+        names=paste0("pc",1:10),
+        las=2)
 
 #####################################
 ############## Part 3: generate PCA scores images ##############
@@ -172,6 +174,19 @@ barplot(,main="Scree plot: Variance explained")
 # note the use of the 'index' argument
 r_pca <- predict(r_NDVI_s, pca_mod, index=1:n_pc,filename="pc_scores.tif",overwrite=T) # fast
 plot(r_pca)
+
+r_NDVI_mean <- mean(r_NDVI_s, na.rm=TRUE) # mean by pixel
+
+#plot(stack(r_pc1,r_pc2))
+#layerStats(r_pc1,r_NDVI_mean )
+cor_pc <- layerStats(stack(r_pca$pc1,r_NDVI_mean),'pearson', na.rm=T)
+cor_pc #PC1 correspond to the average mean by pixel as expected.
+plot(r_pc2)
+
+r_pca <- predict(r_NDVI_s, pca_mod, index=1:n_pc,filename="pc_scores.tif",overwrite=T) # fast
+plot(r_pca)
+plot(r_pca$pc_scores.3)
+plot(r_pca$pc_scores.4)
 
 r_NDVI_mean <- mean(r_NDVI_s, na.rm=TRUE) # mean by pixel
 
