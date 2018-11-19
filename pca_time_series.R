@@ -174,47 +174,58 @@ barplot(percent_explained[1:10],
 # note the use of the 'index' argument
 r_pca <- predict(r_NDVI_s, pca_mod, index=1:n_pc,filename="pc_scores.tif",overwrite=T) # fast
 plot(r_pca)
-
+names(r_pca) <- paste0("pc",1:n_pc) 
 r_NDVI_mean <- mean(r_NDVI_s, na.rm=TRUE) # mean by pixel
 
 #plot(stack(r_pc1,r_pc2))
 #layerStats(r_pc1,r_NDVI_mean )
 cor_pc <- layerStats(stack(r_pca$pc1,r_NDVI_mean),'pearson', na.rm=T)
 cor_pc #PC1 correspond to the average mean by pixel as expected.
-plot(r_pc2)
-
-r_pca <- predict(r_NDVI_s, pca_mod, index=1:n_pc,filename="pc_scores.tif",overwrite=T) # fast
-plot(r_pca)
-plot(r_pca$pc_scores.3)
-plot(r_pca$pc_scores.4)
-
-r_NDVI_mean <- mean(r_NDVI_s, na.rm=TRUE) # mean by pixel
-
-#plot(stack(r_pc1,r_pc2))
-#layerStats(r_pc1,r_NDVI_mean )
-cor_pc <- layerStats(stack(r_pca$pc1,r_NDVI_mean),'pearson', na.rm=T)
-cor_pc #PC1 correspond to the average mean by pixel as expected.
-plot(r_pc2)
+plot(r_pca$pc1)
 
 #####################################
 ############## Part 4 : Analyze temporal patterns from loadings ##############
 
 #do a AR
+#acf(pca_mod$loadings[,1])
+
 acf(pca_mod$loadings[,2])
 acf(pca_mod$loadings[,3])
+acf(pca_mod$loadings[,4])
+
 ccf(pca_mod$loadings[,2],pca_mod$loadings[,3])
 ccf(pca_mod$loadings[,2],pca_mod$loadings[,2])
 
 pacf(pca_mod$loadings[,2])
 # calculate fft of data
 
-###################
+#####################################
+############## Part 5 : Extract at specific towns ##############
 
+cities_sf <- read_sf(file.path(in_dir,"ne_110m_populated_places.shp"))
+#as(cities_sf)
+
+st_crs(cities_sf)
+projection(r_NDVI_s)
+test <- st_intersection(cities_sf, 
+                        st_set_crs(st_as_sf(as(raster::extent(r_NDVI_s), "SpatialPolygons")), st_crs(cities_sf)))
+plot(test)
+cities_df <- raster::extract(r_NDVI_s,test)
+plot(cities_df)
+names(cities_df)
+
+dim(cities_df)
+plot(cities_df[1,1:24],type="b")
+cities_sf$name[1]
+View(test)
+
+plot(test[test$name_en=="Cairo",1:24],typ="b")
+
+###################
 plot(Re(fft(pca_mod$loadings[,2])))
 
 
 test <- fft(pca_mod$loadings[,3])
-
 
 # extract magnitudes and phases
 magn <- Mod(test) # sqrt(Re(test)*Re(test)+Im(test)*Im(test))
@@ -241,5 +252,7 @@ x.axis <- 1:length(magn.1)/time
 plot(x=x.axis,y=magn.1,type="l")
 
 spectrum((pca_mod$loadings[,2]))
+periodogram(pca_mod$loadings[,2])
+
 
 ########################## End of script ######################################
