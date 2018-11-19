@@ -74,8 +74,6 @@ file_format <- ".tif" #PARAM 4
 pattern_str <- "ndvi3g_geo.*.201.*.tif" #pattern for hte GIMMS dataset
 infile_reg_outline <- "africa_roi.tif" #region of interest
 
-
-
 ```
 
 
@@ -99,14 +97,11 @@ r_NDVI_s <- crop(r_stack,r_ref)
 r_mask <- r_NDVI_s < -10000
 
 r_NDVI_s <- mask(r_NDVI_s,r_mask,maskvalue=1)
-plot(r_NDVI_s,y=1)
+plot(r_NDVI_s,y=c(1,7))
 
 ```
-We note the general pattern of vegetation for the African continent for January 1: low level of vegetation cover in the Sahara and Namib desert and the high values of in center of the continent.
 
-### Examing annual temporal pattern for major cities
-
-We assign dates to the raster stack using the time series object (from xts and zoo packages). To examine the changes in vegetation at specific location over the year, we extract values from cities across the continent. We use the xx dataset (available here:). For some cities, a clear seasonal patterns are visible.
+On the NDVI plot, we note the general pattern of vegetation for the African continent for January 1: low level of vegetation cover in the Sahara and Namib desert and the high values of in center of the continent. A careful, visual inspection also show that vegetation values are shifted northwards during the North Hemishere summer (July). The PCA should help in extracting the most characteristic patterns from  the spatio-temporal patterns in different modes (also called components)  of variability. 
 
 ### Performing the PCA ####
 
@@ -180,7 +175,7 @@ Let's now generate the scores images for each component. Note that throughout th
 # note the use of the 'index' argument
 r_pca <- predict(r_NDVI_s, pca_mod, index=1:n_pc,filename="pc_scores.tif",overwrite=T) # fast
 plot(r_pca)
-
+names(r_pca) <- paste0("pc",1:n_pc) 
 r_NDVI_mean <- mean(r_NDVI_s, na.rm=TRUE) # mean by pixel
 
 #plot(stack(r_pc1,r_pc2))
@@ -219,6 +214,23 @@ acf(as.vector(pca_loadings_dz$PC4))
 
 ```
 
+### Examing annual temporal pattern for major cities
+
+We assign dates to the raster stack using the time series object (from xts and zoo packages). To examine the changes in vegetation at specific location over the year, we extract values from cities across the continent. We use the xx dataset (available here:). For some cities, a clear seasonal patterns are visible.
+
+```{r}
+## compare with cov matrix
+## do a plot of with 1,1 unit circle
+## Use information from the anthrome data
+## Pull out some curve from different categories
+## explain the PC1 (average)
+#pca_loadings_dz$PC2
+
+cities_sf <- read_sf(file.path(in_dir,"ne_110m_populated_places.shp"))
+
+```
+
+
 ```{r}
 ## compare with cov matrix
 ## do a plot of with 1,1 unit circle
@@ -228,6 +240,7 @@ acf(as.vector(pca_loadings_dz$PC4))
 #pca_loadings_dz$PC2
 
 ```
+
 
 ### Conclusions
 
