@@ -210,16 +210,20 @@ projection(r_NDVI_s)
 test <- st_intersection(cities_sf, 
                         st_set_crs(st_as_sf(as(raster::extent(r_NDVI_s), "SpatialPolygons")), st_crs(cities_sf)))
 plot(test)
-cities_df <- raster::extract(r_NDVI_s,test)
+cities_df <- raster::extract(r_NDVI_s,test,sp=T)
 plot(cities_df)
 names(cities_df)
 
 dim(cities_df)
-plot(cities_df[1,1:24],type="b")
-cities_sf$name[1]
-View(test)
+#plot(cities_df[1,1:24],type="b")
+#cities_sf$name[1]
+#View(test)
 
-plot(test[test$name_en=="Cairo",1:24],typ="b")
+selected_city <- which(cities_df$name_en=="Cairo")
+plot(as.numeric(cities_df@data[selected_city,121:143]),type="b")
+
+### Use Cairo because it is in the zone with very high scores on PC4
+### Also use city in the Sahel.
 
 ###################
 plot(Re(fft(pca_mod$loadings[,2])))
