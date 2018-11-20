@@ -127,7 +127,6 @@ cor_mat_layerstats <- layerStats(r_NDVI_s, 'pearson', na.rm=T)
 cor_matrix <- cor_mat_layerstats$`pearson correlation coefficient`
 #cov_matrix <- cov_mat_layerstats$`covariance`
 
-
 class(cor_matrix)
 dim(cor_matrix)
 #View(cor_matrix)
@@ -224,6 +223,12 @@ plot(as.numeric(cities_df@data[selected_city,121:143]),type="b")
 
 ### Use Cairo because it is in the zone with very high scores on PC4
 ### Also use city in the Sahel.
+
+######################################
+
+r_anthromes <- raster(file.path(in_dir,"gl_anthrome.tif"))
+plot(r_anthromes)
+r_anthromes_crop <- crop(r_stack,r_ref)
 
 ###################
 plot(Re(fft(pca_mod$loadings[,2])))
